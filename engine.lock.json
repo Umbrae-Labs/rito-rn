@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/Saramanda9988/Rito.git",
+  "upstreamRepository": "https://github.com/Ringyuki/Rito.git",
+  "rustVersion": "1.95.0",
+  "defaultProfile": "lunar",
+  "profiles": {
+    "lunar": {
+      "ref": "dev",
+      "commit": "95267a850d3d8f6f1d695facd9720a7e15e7ec66",
+      "patches": [
+        {
+          "file": "patches/lunar-0001-d5b620862d9d.patch",
+          "sha256": "6ad35328a99aad718dc58e0dfc4ef43ac700ef4bca3136f5f833d566554f6bb9",
+          "sourceCommit": "d5b620862d9d330fe5326e1974ee7ed05ab8967b",
+          "subject": "fix(layout): preserve chapter pagination for unsupported CSS sizes",
+          "upstreamPr": null
+        }
+      ]
+    },
+    "canary": {
+      "ref": "dev",
+      "commit": "95267a850d3d8f6f1d695facd9720a7e15e7ec66",
+      "patches": []
+    },
+    "upstream-release": {
+      "ref": "master",
+      "commit": "4e5cb6e9cb9ae6f5f900effeac93c835c91f3e01",
+      "patches": []
+    }
+  }
+}

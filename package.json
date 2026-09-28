@@ -1,30 +1,84 @@
 {
-  "name": "@ritojs/react-native",
-  "version": "0.1.0",
+  "name": "@umbrae-labs/rito-rn",
+  "version": "0.2.0",
   "description": "Nitro C++ bindings for Rito's native reader protocol.",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
     "codegen": "nitrogen --logLevel=info",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:tooling": "node --test tests/tooling/*.test.mjs",
+    "engine:export": "node scripts/engine.mjs export",
+    "engine:verify": "node scripts/engine.mjs verify",
+    "engine:update": "node scripts/engine.mjs update",
+    "engine:capture": "node scripts/engine.mjs capture",
+    "engine:test": "node scripts/engine.mjs test",
+    "package:verify": "node scripts/verify-package.mjs",
+    "prepack": "node scripts/prepare-package.mjs",
+    "check": "pnpm run typecheck && pnpm run test && pnpm run test:tooling && pnpm run engine:verify && pnpm run package:verify",
+    "package:smoke": "node scripts/smoke-package.mjs"
   },
   "files": [
-    "android-pure-cxx",
+    "src",
     "cpp",
+    "android",
     "ios",
     "native/rito",
+    "nitrogen/generated",
     "specs",
     "scripts",
-    "nitrogen",
-    "android",
+    "plugin",
+    "patches",
+    "engine.lock.json",
+    "app.plugin.js",
     "RitoNitro.podspec",
     "nitro.json",
-    "src",
     "react-native.config.js",
-    "package.json"
+    "LICENSE",
+    "NOTICE",
+    "CONTRIBUTING.md"
   ],
   "peerDependencies": {
     "react-native": ">=0.86.0",
-    "react-native-nitro-modules": ">=0.37.0"
+    "react-native-nitro-modules": ">=0.37.0",
+    "react": ">=19.2.0",
+    "expo": ">=57.0.0"
+  },
+  "license": "AGPL-3.0-only",
+  "author": "Umbrae Labs",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "react-native": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./app.plugin.js": "./app.plugin.js",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependenciesMeta": {
+    "expo": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3",
+    "vitest": "3.2.4",
+    "vite": "7.2.4",
+    "nitrogen": "0.37.0",
+    "react-native-nitro-modules": "0.37.0",
+    "react-native": "0.86.3",
+    "react": "19.2.3",
+    "expo": "~57.0.25"
   }
 }

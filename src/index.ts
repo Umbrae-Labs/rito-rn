@@ -1,6 +1,7 @@
 export {
   getRitoNativeReaderModule,
   isRitoNativeReaderAvailable,
+  type RitoNativeCallResult,
   type RitoNativePinnedFontFace,
   type RitoNativeReaderModule,
 } from './native';
@@ -30,6 +31,9 @@ export {
 } from './protocol/handoff';
 export type * from './protocol/artifact-types';
 export {
+  encodeRitoBackgroundHandoff,
+  encodeRitoBackgroundRequest,
+  encodeRitoForegroundHandoff,
   encodeRitoAdjacentRequest,
   encodeRitoArtifactRequest,
   type RitoAdjacentRequest,

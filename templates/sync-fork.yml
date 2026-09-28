@@ -1,0 +1,28 @@
+# Install this file as .github/workflows/sync-upstream.yml in Saramanda9988/Rito.
+name: Sync upstream branches
+on:
+  schedule:
+    - cron: '13 2 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        branch: [master, dev]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+          fetch-depth: 0
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add upstream https://github.com/Ringyuki/Rito.git
+          git fetch upstream '${{ matrix.branch }}'
+          # Preserve the fork's automation commit when master contains this file.
+          # A source conflict stops the job; no branch history is rewritten.
+          git merge --no-edit FETCH_HEAD
+          git push origin 'HEAD:${{ matrix.branch }}'

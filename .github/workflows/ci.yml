@@ -1,0 +1,50 @@
+name: Validate adapter and engine
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: rustup toolchain install 1.95.0 --profile minimal
+      - run: pnpm run engine:export
+      - run: pnpm run check
+      - run: pnpm run engine:test
+      - run: pnpm pack --pack-destination artifacts
+      - run: pnpm run package:smoke
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: artifacts/*.tgz
+  native:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: aarch64-linux-android
+          - os: macos-latest
+            target: aarch64-apple-ios
+          - os: macos-latest
+            target: aarch64-apple-ios-sim
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: rustup toolchain install 1.95.0 --profile minimal --target ${{ matrix.target }}
+      - run: node scripts/engine.mjs export
+      - run: cargo +1.95.0 check --locked --manifest-path native/rito/Cargo.toml -p rito-ffi --lib --target ${{ matrix.target }}

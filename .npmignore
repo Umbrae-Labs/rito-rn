@@ -1,0 +1,9 @@
+**/target/**
+**/build/**
+**/.cxx/**
+**/.git/**
+**/node_modules/**
+**/*.tsbuildinfo
+.engine/
+upstream/
+artifacts/

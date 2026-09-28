@@ -1,0 +1,41 @@
+name: Propose engine updates
+on:
+  schedule:
+    - cron: '23 3 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  update:
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [lunar, canary, upstream-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: rustup toolchain install 1.95.0 --profile minimal
+      - run: node scripts/engine.mjs update --profile '${{ matrix.profile }}'
+      - run: pnpm run check
+      - run: node scripts/engine.mjs test --profile '${{ matrix.profile }}'
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: engine-update/${{ matrix.profile }}
+          title: Update pinned Rito engine for ${{ matrix.profile }}
+          commit-message: 'chore: update pinned Rito engine'
+          add-paths: |
+            engine.lock.json
+            upstream/rito
+          body: |
+            Updates the exact engine commit. Existing exported patches were checked and applied.
+            Adapter tests, package validation and Rust tests passed before this PR was created.
+            Review native device behavior before adopting the new package in Lunar.

@@ -56,3 +56,7 @@ reports/
 .vscode/
 
 /.pnpm-patches/
+# Generated from the pinned fork and exported Git patches
+/native/rito/
+/.engine/
+*.tgz

@@ -1,0 +1,4 @@
+[submodule "upstream/rito"]
+	path = upstream/rito
+	url = https://github.com/Saramanda9988/Rito.git
+	branch = dev

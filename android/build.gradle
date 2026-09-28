@@ -18,8 +18,12 @@ def isNewArchitectureEnabled() {
   return rootProject.hasProperty("newArchEnabled") && rootProject.getProperty("newArchEnabled") == "true"
 }
 
-def ritoSourceDir = rootProject.file('../modules/rito-rn/native/rito')
-def ritoFfiOutputDir = rootProject.file('app/build/rito-ffi')
+def ritoPackageDir = projectDir.parentFile
+def ritoSourceOverride = providers.gradleProperty('ritoFfiSourceDir')
+    .orElse(providers.environmentVariable('RITO_FFI_SOURCE_DIR')).orNull
+def ritoSourceDir = ritoSourceOverride != null ? rootProject.file(ritoSourceOverride) : new File(ritoPackageDir, 'native/rito')
+def ritoFfiOutputDir = layout.buildDirectory.dir('rito-ffi').get().asFile
+def ritoTargetDir = layout.buildDirectory.dir('rito-target').get().asFile
 
 apply plugin: "com.android.library"
 apply plugin: 'org.jetbrains.kotlin.android'
@@ -56,7 +60,7 @@ android {
             "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
             "-DRITO_FFI_SOURCE_DIR=${ritoSourceDir.absolutePath.replace('\\', '/')}",
             "-DRITO_FFI_LIBRARY_ROOT=${ritoFfiOutputDir.absolutePath.replace('\\', '/')}"
-        // Rito FFI is currently built by the app's Gradle task for arm64.
+        // The library owns its Rust build; the host supplies the matching ABI.
         abiFilters "arm64-v8a"
 
         buildTypes {
@@ -146,10 +150,29 @@ dependencies {
   implementation project(":react-native-nitro-modules")
 }
 
-if (isNewArchitectureEnabled()) {
-  react {
-    jsRootDir = file("../src/")
-    libraryName = "RitoNitro"
-    codegenJavaPackageName = "com.ritonitro"
+// Source packages build Rust inside this module, independently of the host layout.
+def buildRitoFfi = tasks.register('buildRitoFfiArm64') {
+  inputs.files(fileTree(ritoSourceDir) { exclude 'target/**' })
+  outputs.file(new File(ritoFfiOutputDir, 'arm64-v8a/release/librito_ffi.a'))
+  doLast {
+    if (!new File(ritoSourceDir, 'Cargo.toml').exists()) {
+      throw new GradleException('Rito sources are missing. Run engine:export in the rito-rn repository before packing.')
+    }
+    providers.exec {
+      commandLine 'cargo', '+1.95.0', 'ndk', '-t', 'arm64-v8a',
+          'build', '--release', '--locked', '--target-dir', ritoTargetDir.absolutePath,
+          '--manifest-path', new File(ritoSourceDir, 'crates/rito-ffi/Cargo.toml').absolutePath
+      workingDir ritoSourceDir
+    }.result.get().assertNormalExitValue()
+    def library = new File(ritoTargetDir, 'aarch64-linux-android/release/librito_ffi.a')
+    if (!library.exists()) throw new GradleException('Rust static library was not generated')
+    def destination = new File(ritoFfiOutputDir, 'arm64-v8a/release/librito_ffi.a')
+    destination.parentFile.mkdirs()
+    destination.bytes = library.bytes
+  }
+}
+tasks.configureEach { task ->
+  if (task.name.startsWith('configureCMake') || task.name.startsWith('buildCMake')) {
+    task.dependsOn(buildRitoFfi)
   }
 }

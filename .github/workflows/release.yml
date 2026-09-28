@@ -1,0 +1,60 @@
+name: Build or publish npm package
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        type: choice
+        options: [lunar, canary, upstream-release]
+        default: lunar
+        required: true
+      version:
+        description: Unique npm version; preview profiles require a prerelease suffix
+        type: string
+        required: true
+      publish:
+        description: Publish the verified tarball using the npm environment
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: npm
+    env:
+      RITO_ENGINE_PROFILE: ${{ inputs.profile }}
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: rustup toolchain install 1.95.0 --profile minimal
+      - run: |
+          node -e 'const v=process.env.RELEASE_VERSION,p=process.env.RITO_ENGINE_PROFILE;if(!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(v)||(p!=="lunar"&&!v.includes("-")))throw Error("Invalid release version")'
+          npm version "$RELEASE_VERSION" --no-git-tag-version --ignore-scripts
+          node scripts/engine.mjs export --profile "$RITO_ENGINE_PROFILE"
+      - run: pnpm run check
+      - run: node scripts/engine.mjs test --profile "$RITO_ENGINE_PROFILE"
+      - run: pnpm pack --pack-destination artifacts
+      - run: pnpm run package:smoke
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-${{ inputs.profile }}-${{ inputs.version }}
+          path: artifacts/*.tgz
+      - if: inputs.publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          case "$RITO_ENGINE_PROFILE" in
+            lunar) tag=latest ;;
+            canary) tag=canary ;;
+            upstream-release) tag=upstream-release ;;
+          esac
+          npm publish artifacts/*.tgz --access public --tag "$tag"
