@@ -90,6 +90,10 @@ pnpm pack --pack-destination artifacts
 Generated Rust sources are excluded from adapter Git history and included in npm
 packages. Source generation runs while packing, never during consumer installation.
 The release action defaults to building an artifact; publishing is explicitly selected.
+GitHub releases authenticate through npm trusted publishing with OIDC. Register
+`Umbrae-Labs`, repository `rito-rn`, workflow `release.yml`, and environment `npm`
+in the npm package settings. A new package needs one interactive initial publish
+before this trust relationship can be registered; see CONTRIBUTING.md.
 
 ## License
 

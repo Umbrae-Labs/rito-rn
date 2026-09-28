@@ -103,7 +103,7 @@ pnpm pack --pack-destination artifacts
 
 The manual release action accepts a profile and unique version. By default it
 uploads a tarball only. Enabling `publish` publishes through the `npm` GitHub
-environment, using that environment's `NPM_TOKEN` and the following dist-tag:
+environment using npm trusted publishing with GitHub OIDC and the following dist-tag:
 
 | Profile | npm tag | Version example |
 | --- | --- | --- |
@@ -111,9 +111,50 @@ environment, using that environment's `NPM_TOKEN` and the following dist-tag:
 | canary | canary | 0.3.0-canary.1 |
 | upstream-release | upstream-release | 0.3.0-upstream.1 |
 
-Preview profiles require a prerelease version. Configure npm access for
-`@umbrae-labs` and the GitHub environment before the first publish. Set the
-package's repository URL after uploading this independent repository.
+Preview profiles require a prerelease version. The release job runs on a
+GitHub-hosted runner with Node 24, checks npm >=11.5.1, and grants `id-token: write`.
+It uses no `NPM_TOKEN` secret. Package-manager caching is disabled for this job.
+
+### First publication
+
+npm requires the package to exist before a trusted publisher can be registered.
+For a new package, run the release action with `publish` left false, download the
+verified tarball artifact, and publish it from an interactive local npm session:
+
+```sh
+npm login
+npm publish ./umbrae-labs-rito-rn-0.2.0.tgz --access public --tag latest
+```
+
+Complete npm's interactive authentication and two-factor verification when
+prompted. The account needs publishing permission for the `@umbrae-labs` scope.
+Publish the tested artifact; subsequent versions must use a new version number.
+
+### Registering the trusted publisher
+
+In the npm package's Settings, choose Trusted Publisher and GitHub Actions:
+
+| Field | Value |
+| --- | --- |
+| Organization or user | Umbrae-Labs |
+| Repository | rito-rn |
+| Workflow filename | release.yml |
+| Environment name | npm |
+| Allowed actions | Allow npm publish |
+
+Create the `npm` environment in the GitHub repository as well. Values are
+case-sensitive; the workflow field is the filename without `.github/workflows/`.
+Keep `package.json` repository.url set to
+`git+https://github.com/Umbrae-Labs/rito-rn.git`.
+
+Once configured, run the release action with a new version, profile `lunar`, and
+`publish` enabled. npm exchanges the GitHub OIDC identity for short-lived publish
+credentials. Public GitHub repositories publishing public packages also receive
+automatic provenance. After a successful OIDC release, remove any obsolete npm
+publishing token and corresponding GitHub secret.
+
+References: [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
+and [npm trust prerequisites](https://docs.npmjs.com/cli/v11/commands/npm-trust/).
 
 Consumers pin a concrete version. The dist-tags identify release channels; they
 are not reproducible build inputs. Lunar temporarily consumes the packed tarball

@@ -17,6 +17,7 @@ on:
         default: false
 permissions:
   contents: read
+  id-token: write
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -29,16 +30,20 @@ jobs:
         with:
           submodules: recursive
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
-          cache: pnpm
+          package-manager-cache: false
+      - name: Verify npm trusted-publishing support
+        run: |
+          npm --version
+          node -e 'const v=require("node:child_process").execFileSync("npm",["--version"],{encoding:"utf8"}).trim().split(".").map(Number);if(v[0]<11||(v[0]===11&&(v[1]<5||(v[1]===5&&v[2]<1))))throw Error("Trusted publishing requires npm >=11.5.1")'
       - run: pnpm install --frozen-lockfile
       - run: rustup toolchain install 1.95.0 --profile minimal
       - run: |
           node -e 'const v=process.env.RELEASE_VERSION,p=process.env.RITO_ENGINE_PROFILE;if(!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(v)||(p!=="lunar"&&!v.includes("-")))throw Error("Invalid release version")'
-          npm version "$RELEASE_VERSION" --no-git-tag-version --ignore-scripts
+          npm version "$RELEASE_VERSION" --no-git-tag-version --ignore-scripts --allow-same-version
           node scripts/engine.mjs export --profile "$RITO_ENGINE_PROFILE"
       - run: pnpm run check
       - run: node scripts/engine.mjs test --profile "$RITO_ENGINE_PROFILE"
@@ -49,8 +54,7 @@ jobs:
           name: npm-${{ inputs.profile }}-${{ inputs.version }}
           path: artifacts/*.tgz
       - if: inputs.publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        name: Publish using npm trusted publishing
         run: |
           case "$RITO_ENGINE_PROFILE" in
             lunar) tag=latest ;;

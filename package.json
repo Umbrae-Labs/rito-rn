@@ -1,7 +1,15 @@
 {
   "name": "@umbrae-labs/rito-rn",
   "version": "0.2.0",
-  "description": "Nitro C++ bindings for Rito's native reader protocol.",
+  "description": "React Native adaptation for Rito, incorporating the patched Lunar Rito core.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Umbrae-Labs/rito-rn.git"
+  },
+  "homepage": "https://github.com/Umbrae-Labs/rito-rn#readme",
+  "bugs": {
+    "url": "https://github.com/Umbrae-Labs/rito-rn/issues"
+  },
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
