@@ -157,5 +157,5 @@ References: [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
 and [npm trust prerequisites](https://docs.npmjs.com/cli/v11/commands/npm-trust/).
 
 Consumers pin a concrete version. The dist-tags identify release channels; they
-are not reproducible build inputs. Lunar temporarily consumes the packed tarball
-from `vendor`, so its repository builds without this development checkout.
+are not reproducible build inputs. Lunar consumes the exact npm registry version
+`@umbrae-labs/rito-rn@0.2.0`, so its repository builds without this development checkout.
