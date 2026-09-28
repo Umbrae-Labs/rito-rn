@@ -1,4 +1,4 @@
-# rito-rn
+# Rito-rn
 
 > [!IMPORTANT]
 > This is an unofficial, community-maintained adaptation layer for [Rito](https://github.com/Ringyuki/Rito)
