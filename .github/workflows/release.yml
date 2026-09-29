@@ -19,7 +19,26 @@ permissions:
   contents: read
   id-token: write
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RITO_ENGINE_PROFILE: ${{ inputs.profile }}
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Validate release version before native builds
+        run: |
+          node -e 'const v=process.env.RELEASE_VERSION,p=process.env.RITO_ENGINE_PROFILE;if(!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(v)||(p!=="lunar"&&!v.includes("-")))throw Error("Invalid release version")'
+          npm version "$RELEASE_VERSION" --no-git-tag-version --ignore-scripts --allow-same-version
+          node -e 'if(require("./package.json").version!==process.env.RELEASE_VERSION)throw Error("Use the canonical npm version without leading zeroes")'
   native:
+    needs: validate
     uses: ./.github/workflows/native-prebuilds.yml
     with:
       profile: ${{ inputs.profile }}
@@ -47,7 +66,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: rustup toolchain install 1.95.0 --profile minimal
       - run: |
-          node -e 'const v=process.env.RELEASE_VERSION,p=process.env.RITO_ENGINE_PROFILE;if(!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(v)||(p!=="lunar"&&!v.includes("-")))throw Error("Invalid release version")'
           npm version "$RELEASE_VERSION" --no-git-tag-version --ignore-scripts --allow-same-version
           node scripts/engine.mjs export --profile "$RITO_ENGINE_PROFILE"
       - uses: actions/download-artifact@v4
@@ -60,12 +78,8 @@ jobs:
       - run: node scripts/engine.mjs test --profile "$RITO_ENGINE_PROFILE"
       - run: pnpm pack --pack-destination artifacts
       - run: pnpm run package:smoke
-      - uses: actions/upload-artifact@v4
-        with:
-          name: npm-${{ inputs.profile }}-${{ inputs.version }}
-          path: artifacts/*.tgz
-      - if: inputs.publish
-        name: Publish using npm trusted publishing
+      - name: Validate npm publication without uploading
+        id: publication
         run: |
           case "$RITO_ENGINE_PROFILE" in
             lunar) tag=latest ;;
@@ -74,4 +88,17 @@ jobs:
           esac
           archive="./artifacts/umbrae-labs-rito-rn-${RELEASE_VERSION}.tgz"
           test -f "$archive"
-          npm publish "$archive" --access public --tag "$tag"
+          npm publish "$archive" --dry-run --access public --tag "$tag"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-${{ inputs.profile }}-${{ inputs.version }}
+          path: artifacts/*.tgz
+      - if: inputs.publish
+        name: Publish using npm trusted publishing
+        env:
+          RELEASE_ARCHIVE: ${{ steps.publication.outputs.archive }}
+          RELEASE_TAG: ${{ steps.publication.outputs.tag }}
+        run: |
+          npm publish "$RELEASE_ARCHIVE" --access public --tag "$RELEASE_TAG"
