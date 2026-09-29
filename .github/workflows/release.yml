@@ -72,4 +72,6 @@ jobs:
             canary) tag=canary ;;
             upstream-release) tag=upstream-release ;;
           esac
-          npm publish artifacts/*.tgz --access public --tag "$tag"
+          archive="./artifacts/umbrae-labs-rito-rn-${RELEASE_VERSION}.tgz"
+          test -f "$archive"
+          npm publish "$archive" --access public --tag "$tag"
