@@ -1,132 +1,154 @@
-# Rito-rn
+# Rito for React Native
+
+React Native bindings for the [Rito](https://github.com/Ringyuki/Rito) EPUB engine,
+published as [`@umbrae-labs/rito-rn`](https://www.npmjs.com/package/@umbrae-labs/rito-rn).
 
 > [!IMPORTANT]
-> This is an unofficial, community-maintained adaptation layer for [Rito](https://github.com/Ringyuki/Rito)
+> This is an unofficial, community-maintained adaptation of Rito, maintained by
+> Umbrae Labs for [Lunar](https://github.com/Umbrae-Labs/lunar).
 
-React Native Nitro bindings for the [Rito](https://github.com/Ringyuki/Rito)
+## Precompiled Rust engine
 
-## Install
+The release pipeline builds the Rust engine before publishing and includes the
+libraries in the npm package. Application builds link these libraries and compile
+the Nitro C++ bridge against the application's React Native and Nitro versions.
+Consumers of binary releases can build their applications without installing Rust
+or cargo-ndk. Standard Android or Xcode build tools are still required.
 
-Install a published version:
+| Platform | Included Rust library | Architectures |
+| --- | --- | --- |
+| Android | `librito_ffi.a` | `arm64-v8a` |
+| iOS device | Static library in `RitoFFI.xcframework` | ARM64 |
+| iOS simulator | Static library in `RitoFFI.xcframework` | ARM64 and x86_64 |
+
+Each library is checked against its engine source manifest and file checksums.
+Missing or mismatched artifacts stop the build; source compilation is an explicit
+development option.
+
+> [!NOTE]
+> Version 0.2.0 was published as a source-only package. Precompiled libraries become
+> available in releases built with this publishing configuration. Upgrade the npm
+> dependency to such a release to use them.
+
+Android static-library and Nitro bridge builds have been validated locally.
+Apple library builds and FFI link checks are configured in macOS CI; a complete
+iOS application build and device testing remain to be validated. Platform support
+currently covers Android and iOS.
+
+## Installation
 
 ```sh
 pnpm add @umbrae-labs/rito-rn react-native-nitro-modules@0.37.0
 ```
 
-## Requirements
+Use a native application build after installing or upgrading this package so the
+native library changes are included.
 
-| Component | Current baseline |
+| Component | Development baseline |
 | --- | --- |
-| React Native | 0.86.3, New Architecture |
+| React Native | 0.86.3 with the New Architecture |
+| React | 19.2.3 |
 | Nitro Modules | 0.37.0 |
 | Expo integration | SDK 57 |
-| Rust, for source builds and maintainers | 1.95.0 |
-| cargo-ndk, for Android source builds and maintainers | 4.1.2 |
-| Android ABI | arm64-v8a |
-| Package tooling | Node 22 or newer, pnpm 11.24.0 |
+| Node.js | 22 or newer |
 
-Releases built from this revision include the Rust FFI binaries. Version 0.2.0
-was source-only; these changes take effect after publishing and installing a new
-version. App developers still need the usual Android or Xcode toolchain to build
-the Nitro bridge and application. Using a binary release does not require Rust.
+### Android
 
-## Android
+For Expo projects, add the plugin to the existing `plugins` array in the app
+configuration. The plugin sets `reactNativeArchitectures` to `arm64-v8a`.
 
-Add `@umbrae-labs/rito-rn` to the Expo `plugins` array. The plugin selects ARM64;
-the library Gradle project verifies the bundled ARM64 static library and links
-it through CMake. Plain React Native uses
-autolinking and `reactNativeArchitectures=arm64-v8a` in Gradle properties.
+```json
+{
+  "expo": {
+    "plugins": ["@umbrae-labs/rito-rn"]
+  }
+}
+```
 
 ```sh
 pnpm exec expo prebuild --platform android
 pnpm exec expo run:android
 ```
 
-Configure SDK, NDK and JDK versions matching the host React Native version.
-The binary is built with NDK 27.1.12297006 and API 23. Only arm64-v8a is currently
-supported. Missing or mismatched binaries stop the build with an actionable
-error rather than automatically starting Cargo.
+For plain React Native projects, autolinking discovers the package. Set
+`reactNativeArchitectures=arm64-v8a` in `android/gradle.properties`.
 
-## iOS
+Configure the Android SDK, NDK and JDK for the host React Native version. The
+bundled Rust library is built with NDK 27.1.12297006 and API 23; the application
+must also meet React Native's minimum SDK requirement. Android x86_64 emulators
+and 32-bit targets are outside the current package's supported architectures.
 
-Autolinking loads the podspec, which verifies and links `RitoFFI.xcframework`.
-It contains an ARM64 device library and an ARM64/x86_64 simulator library built
-for iOS 15.1 or newer; the host React Native version may require a newer minimum.
-CocoaPods selects the matching slice. Run `pod install` after upgrading the package.
+### iOS
 
-The release CI builds and link-checks all three Rust targets on macOS. A complete
-React Native Xcode build and device behavior still require platform validation.
-VisionOS is not supported.
+On macOS, install pods using the application's usual CocoaPods command after
+adding the package. Autolinking loads the podspec, which validates
+`RitoFFI.xcframework`; CocoaPods selects the device or simulator library.
 
-## Building Rust from source
-
-For engine development, explicitly opt in with `RITO_BUILD_FROM_SOURCE=1`.
-On Android, `ritoBuildFromSource=true` in Gradle properties is also supported.
-On iOS, set the environment variable **when running pod install** so the podspec
-selects its Rust build phase, then keep it set while building. Run pod install
-again without it to return to the bundled XCFramework.
-
-Install the tools for the platform being built:
-
-```sh
-rustup toolchain install 1.95.0 --profile minimal
-rustup target add aarch64-linux-android --toolchain 1.95.0
-cargo +1.95.0 install cargo-ndk --version 4.1.2 --locked
-# On macOS, for Apple targets:
-rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios --toolchain 1.95.0
-```
-
-Rust builds use `--locked`. `RITO_FFI_SOURCE_DIR` selects a custom kernel workspace
-and also enables source mode. Set it during pod installation and Xcode builds on
-iOS. In source mode, an existing Apple `librito_ffi.a` can be supplied with
-`RITO_FFI_IOS_LIBRARY_DIR`; it must match the active platform and architectures.
+The Rust libraries target iOS 15.1 or newer. The application's minimum iOS version
+must also satisfy its React Native version. The default pod configuration links
+the bundled library without adding a Rust compilation phase.
 
 ## Engine profiles
 
-| Profile | Fixed source | Local patches | npm tag |
+A published package contains one engine profile, selected during its release.
+Profiles determine the pinned engine source and patch series.
+
+| Profile | Source in the Rito fork | Local patches | npm tag |
 | --- | --- | --- | --- |
-| lunar | Fork dev commit | Explicit patch series | latest |
-| canary | Fork dev commit | None | canary |
-| upstream-release | Fork master commit | None | upstream-release |
+| `lunar` | Pinned `dev` commit | Lunar patch series | `latest` |
+| `canary` | Pinned `dev` commit | None | `canary` |
+| `upstream-release` | Pinned `master` commit | None | `upstream-release` |
 
-`engine.lock.json` records the build inputs. The generated
-`native/rito/rito-source.json` records source hashes and attribution. Branch names
-are resolved only by explicit update commands; builds use commit hashes.
-The master profile represents an official upstream release only when its SHA is
-pinned to that release. The Lunar profile includes the CSS sizing compatibility
-fix; some content-based dimensions currently use automatic sizing.
+`engine.lock.json` records exact commits and patch checksums. Branch names are
+resolved by explicit engine updates; application builds use the packaged artifacts.
+The `upstream-release` profile represents an official upstream release when its
+pinned commit corresponds to that release.
 
-## Development and publishing
+The Lunar patch series includes compatibility handling for CSS sizing values such
+as `fit-content`. Some intrinsic sizes fall back to automatic sizing so pagination
+can continue.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for patch capture, upstream PRs, updates,
-CI, fork synchronization and npm publication.
+## Source development
 
-```sh
-git submodule update --init --recursive
-pnpm install --frozen-lockfile
-pnpm run engine:export
-pnpm run check
-pnpm run engine:test
-# Build on the appropriate hosts and collect both prebuilt directories first:
-pnpm run native:build android
-# On macOS:
-pnpm run native:build ios
-pnpm run native:verify
-pnpm pack --pack-destination artifacts
-```
+To modify the engine or use a source-only archive, enable
+`RITO_BUILD_FROM_SOURCE=1`. Android also accepts `ritoBuildFromSource=true` in
+Gradle properties. On iOS, set the environment variable when running `pod install`
+and when building; rerun pod installation without it to return to precompiled mode.
 
-Generated Rust sources and binaries are excluded from adapter Git history and
-included in npm packages. Source generation runs while packing, never during
-consumer installation. `prebuilt/<platform>/manifest.json` records artifact hashes,
-build tool versions, and a digest of the engine source manifest, including its
-profile, patches and header hashes. Packing requires both platforms by default.
-See CONTRIBUTING.md for an explicit source-only development archive.
-The release action defaults to building an artifact; publishing is explicitly selected.
-GitHub releases authenticate through npm trusted publishing with OIDC. Register
-`Umbrae-Labs`, repository `rito-rn`, workflow `release.yml`, and environment `npm`
-in the npm package settings. A new package needs one interactive initial publish
-before this trust relationship can be registered; see CONTRIBUTING.md.
+Source builds require Rust 1.95.0 and the appropriate target toolchains. Android
+also requires cargo-ndk 4.1.2. `RITO_FFI_SOURCE_DIR` selects a custom Rust workspace
+and enables source mode. See [CONTRIBUTING.md](CONTRIBUTING.md) for kernel patches,
+tooling checks and packaging commands.
+
+| Directory | Purpose |
+| --- | --- |
+| `src` | TypeScript API, reader sessions and protocol handling |
+| `cpp`, `android`, `ios` | Nitro bridge and platform integration |
+| `upstream/rito` | Rito fork submodule for engine development |
+| `patches` | Exported kernel patch series |
+| `native/rito` | Generated Rust source included in npm packages |
+| `prebuilt` | Generated Rust binaries and verification manifests |
+
+Generated sources and binaries are excluded from Git history and included during
+packaging. Consumer installation uses the npm package's contents.
+
+## Publishing
+
+Run [release.yml](.github/workflows/release.yml) from GitHub Actions with an engine
+profile and a new npm version. Leave `publish` disabled to download and inspect
+the verified archive, or enable it to publish through npm trusted publishing.
+Preview profiles require a prerelease version suffix.
+
+The release action calls [native-prebuilds.yml](.github/workflows/native-prebuilds.yml)
+to build Android and Apple libraries, collects both artifacts, verifies their
+engine identity, and packs the npm archive. Both platforms must pass before
+publication. [ci.yml](.github/workflows/ci.yml) runs the same native builds and
+package checks for pushes and pull requests.
+
+Trusted-publisher configuration, source-only development archives and fork
+synchronization are documented in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-AGPL-3.0-only. Rito and vendored Parley retain their license files. See LICENSE and NOTICE.
+[AGPL-3.0-only](LICENSE). Rito and vendored Parley retain their license files.
+See [NOTICE](NOTICE) for attribution.
