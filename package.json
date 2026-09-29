@@ -25,7 +25,9 @@
     "package:verify": "node scripts/verify-package.mjs",
     "prepack": "node scripts/prepare-package.mjs",
     "check": "pnpm run typecheck && pnpm run test && pnpm run test:tooling && pnpm run engine:verify && pnpm run package:verify",
-    "package:smoke": "node scripts/smoke-package.mjs"
+    "package:smoke": "node scripts/smoke-package.mjs",
+    "native:build": "node scripts/prebuilt.mjs build",
+    "native:verify": "node scripts/prebuilt.mjs verify"
   },
   "files": [
     "src",
@@ -33,6 +35,7 @@
     "android",
     "ios",
     "native/rito",
+    "prebuilt",
     "nitrogen/generated",
     "specs",
     "scripts",

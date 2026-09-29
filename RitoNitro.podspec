@@ -1,6 +1,8 @@
 require "json"
 
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))
+build_from_source = ['1', 'true'].include?(ENV['RITO_BUILD_FROM_SOURCE']) || !ENV['RITO_FFI_SOURCE_DIR'].to_s.empty?
+source_dir = ENV['RITO_FFI_SOURCE_DIR'].to_s.empty? ? '$(PODS_TARGET_SRCROOT)/native/rito' : File.expand_path(ENV['RITO_FFI_SOURCE_DIR'])
 
 Pod::Spec.new do |s|
   s.name         = "RitoNitro"
@@ -22,12 +24,10 @@ Pod::Spec.new do |s|
   ]
   s.pod_target_xcconfig = {
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++20',
-    'HEADER_SEARCH_PATHS' => '$(PODS_TARGET_SRCROOT)/native/rito/crates/rito-ffi/include'
+    'HEADER_SEARCH_PATHS' => "$(inherited) \"#{source_dir}/crates/rito-ffi/include\""
   }
-  s.user_target_xcconfig = {
-    'LIBRARY_SEARCH_PATHS' => '$(inherited) "$(PODS_CONFIGURATION_BUILD_DIR)/RitoNitro"',
-    'OTHER_LDFLAGS' => '$(inherited) -lrito_ffi'
-  }
+  s.libraries = 'c++', 'iconv'
+  s.frameworks = 'Security', 'CoreFoundation'
 
   load 'nitrogen/generated/ios/RitoNitro+autolinking.rb'
   add_nitrogen_files(s)
@@ -36,11 +36,23 @@ Pod::Spec.new do |s|
   s.dependency 'React-callinvoker'
   install_modules_dependencies(s)
 
-  s.script_phase = {
-    :name => 'Build Rito Rust library',
-    :execution_position => :before_compile,
-    :script => 'bash "${PODS_TARGET_SRCROOT}/scripts/build-ios.sh"',
-    :input_files => ['$(PODS_TARGET_SRCROOT)/native/rito/rito-source.json', '$(PODS_TARGET_SRCROOT)/native/rito/Cargo.lock'],
-    :output_files => ['$(PODS_CONFIGURATION_BUILD_DIR)/RitoNitro/librito_ffi.a']
-  }
+  if build_from_source
+    s.pod_target_xcconfig = s.pod_target_xcconfig.merge('RITO_FFI_SOURCE_DIR' => source_dir)
+    s.user_target_xcconfig = {
+      'LIBRARY_SEARCH_PATHS' => '$(inherited) "$(PODS_CONFIGURATION_BUILD_DIR)/RitoNitro"',
+      'OTHER_LDFLAGS' => '$(inherited) -lrito_ffi'
+    }
+    s.script_phase = {
+      :name => 'Build Rito Rust library',
+      :execution_position => :before_compile,
+      :script => 'bash "${PODS_TARGET_SRCROOT}/scripts/build-ios.sh"',
+      :input_files => ['$(PODS_TARGET_SRCROOT)/native/rito/rito-source.json', '$(PODS_TARGET_SRCROOT)/native/rito/Cargo.lock'],
+      :output_files => ['$(PODS_CONFIGURATION_BUILD_DIR)/RitoNitro/librito_ffi.a']
+    }
+  else
+    unless system(ENV.fetch('NODE_BINARY', 'node'), File.join(__dir__, 'scripts/prebuilt.mjs'), 'verify', 'ios')
+      raise 'Rito iOS prebuilts failed validation. Install a binary release or set RITO_BUILD_FROM_SOURCE=1 before pod install.'
+    end
+    s.vendored_frameworks = 'prebuilt/ios/RitoFFI.xcframework'
+  end
 end

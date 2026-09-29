@@ -6,6 +6,7 @@ permissions:
   contents: read
 jobs:
   package:
+    needs: native
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +20,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: rustup toolchain install 1.95.0 --profile minimal
       - run: pnpm run engine:export
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: prebuilt-*
+          merge-multiple: true
+          path: prebuilt
+      - run: pnpm run native:verify
       - run: pnpm run check
       - run: pnpm run engine:test
       - run: pnpm pack --pack-destination artifacts
@@ -28,23 +35,4 @@ jobs:
           name: npm-package
           path: artifacts/*.tgz
   native:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: aarch64-linux-android
-          - os: macos-latest
-            target: aarch64-apple-ios
-          - os: macos-latest
-            target: aarch64-apple-ios-sim
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: rustup toolchain install 1.95.0 --profile minimal --target ${{ matrix.target }}
-      - run: node scripts/engine.mjs export
-      - run: cargo +1.95.0 check --locked --manifest-path native/rito/Cargo.toml -p rito-ffi --lib --target ${{ matrix.target }}
+    uses: ./.github/workflows/native-prebuilds.yml

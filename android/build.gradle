@@ -22,7 +22,10 @@ def ritoPackageDir = projectDir.parentFile
 def ritoSourceOverride = providers.gradleProperty('ritoFfiSourceDir')
     .orElse(providers.environmentVariable('RITO_FFI_SOURCE_DIR')).orNull
 def ritoSourceDir = ritoSourceOverride != null ? rootProject.file(ritoSourceOverride) : new File(ritoPackageDir, 'native/rito')
-def ritoFfiOutputDir = layout.buildDirectory.dir('rito-ffi').get().asFile
+def ritoBuildFromSource = providers.gradleProperty('ritoBuildFromSource')
+    .orElse(providers.environmentVariable('RITO_BUILD_FROM_SOURCE')).orElse('0').get() in ['1', 'true']
+ritoBuildFromSource = ritoBuildFromSource || ritoSourceOverride != null
+def ritoFfiOutputDir = ritoBuildFromSource ? layout.buildDirectory.dir('rito-ffi').get().asFile : new File(ritoPackageDir, 'prebuilt/android')
 def ritoTargetDir = layout.buildDirectory.dir('rito-target').get().asFile
 
 apply plugin: "com.android.library"
@@ -152,6 +155,7 @@ dependencies {
 
 // Source packages build Rust inside this module, independently of the host layout.
 def buildRitoFfi = tasks.register('buildRitoFfiArm64') {
+  onlyIf { ritoBuildFromSource }
   inputs.files(fileTree(ritoSourceDir) { exclude 'target/**' })
   outputs.file(new File(ritoFfiOutputDir, 'arm64-v8a/release/librito_ffi.a'))
   doLast {
@@ -171,8 +175,19 @@ def buildRitoFfi = tasks.register('buildRitoFfiArm64') {
     destination.bytes = library.bytes
   }
 }
+def verifyRitoPrebuilt = tasks.register('verifyRitoPrebuilt') {
+  // Check before CMake configures or reuses a cached native build.
+  doLast {
+    providers.exec {
+      commandLine providers.environmentVariable('NODE_BINARY').orElse('node').get(),
+          new File(ritoPackageDir, 'scripts/prebuilt.mjs').absolutePath, 'verify', 'android'
+      workingDir ritoPackageDir
+    }.result.get().assertNormalExitValue()
+  }
+}
+
 tasks.configureEach { task ->
   if (task.name.startsWith('configureCMake') || task.name.startsWith('buildCMake')) {
-    task.dependsOn(buildRitoFfi)
+    task.dependsOn(ritoBuildFromSource ? buildRitoFfi : verifyRitoPrebuilt)
   }
 }

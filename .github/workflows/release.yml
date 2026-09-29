@@ -19,7 +19,12 @@ permissions:
   contents: read
   id-token: write
 jobs:
+  native:
+    uses: ./.github/workflows/native-prebuilds.yml
+    with:
+      profile: ${{ inputs.profile }}
   release:
+    needs: native
     runs-on: ubuntu-latest
     environment: npm
     env:
@@ -45,6 +50,12 @@ jobs:
           node -e 'const v=process.env.RELEASE_VERSION,p=process.env.RITO_ENGINE_PROFILE;if(!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(v)||(p!=="lunar"&&!v.includes("-")))throw Error("Invalid release version")'
           npm version "$RELEASE_VERSION" --no-git-tag-version --ignore-scripts --allow-same-version
           node scripts/engine.mjs export --profile "$RITO_ENGINE_PROFILE"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: prebuilt-*
+          merge-multiple: true
+          path: prebuilt
+      - run: pnpm run native:verify
       - run: pnpm run check
       - run: node scripts/engine.mjs test --profile "$RITO_ENGINE_PROFILE"
       - run: pnpm pack --pack-destination artifacts

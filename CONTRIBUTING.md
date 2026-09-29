@@ -2,7 +2,7 @@
 
 The adapter and kernel have separate editing locations. Edit TypeScript, Nitro,
 C++ and platform integration in this repository. Edit Rust in `upstream/rito`,
-on a topic branch of the Rito fork. `native/rito` and `.engine` are generated.
+on a topic branch of the Rito fork. `native/rito`, `prebuilt` and `.engine` are generated.
 
 ## Initial checkout
 
@@ -82,10 +82,12 @@ full generated engine workspace with upstream fixtures and fonts; the smaller
 npm export is validated separately by Cargo and the native build.
 Export prunes Cargo.lock for the smaller workspace and verifies that every
 remaining registry dependency retains its upstream version and checksum.
-`pnpm run package:smoke` unpacks the tarball outside this repository, verifies
-its file hashes and builds the FFI crate with `--locked`.
+`pnpm run package:smoke` unpacks the tarball outside this repository and verifies
+all source and binary hashes. It also executes the installed binary verifier
+without requiring Cargo or the development checkout.
 
-CI also checks the Android ARM64 and Apple device/simulator Rust targets. Native
+CI builds release-mode Android ARM64 and Apple device/simulator static libraries,
+links small FFI clients, and packages the Apple slices into an XCFramework. Native
 device behavior remains part of Lunar's adoption testing. An engine update is
 not an automatic Lunar dependency upgrade.
 
@@ -98,8 +100,32 @@ for its base, patch series, toolchain and file hashes.
 ```sh
 pnpm run engine:export
 pnpm run check
+# On an Android build host with Rust 1.95.0, cargo-ndk 4.1.2 and NDK 27.1.12297006:
+pnpm run native:build android
+# On macOS with Xcode and the three Apple Rust targets installed:
+pnpm run native:build ios
+# Collect both hosts' prebuilt directories in this checkout:
+pnpm run native:verify
 pnpm pack --pack-destination artifacts
+pnpm run package:smoke
 ```
+
+`native-prebuilds.yml` is a reusable action called by CI and release. It exports
+the selected profile on each build host, builds and link-checks the libraries,
+and uploads `prebuilt-android` and `prebuilt-ios`. The packaging job downloads both,
+checks their source identity, then packs and verifies the resulting npm archive.
+The C++ Nitro bridge remains source-built against the consuming application's
+React Native and Nitro versions. All binaries come from this release run;
+consumer installation does not download separate GitHub artifacts.
+
+Ordinary `pnpm run check` allows absent binary directories for engine editing,
+but validates every binary directory that is present. An engine change invalidates
+older prebuilts: rebuild them or remove the generated `prebuilt` directory before
+running source-only checks. Normal `pnpm pack` requires both platforms. For a
+local source-only development archive, remove generated prebuilts and set
+`RITO_PACKAGE_MODE=source` while running `pnpm pack` and `pnpm run package:smoke`.
+Consumers of that archive must enable `RITO_BUILD_FROM_SOURCE=1`. Public release
+automation always requires binaries; keep source-only archives for development.
 
 The manual release action accepts a profile and unique version. By default it
 uploads a tarball only. Enabling `publish` publishes through the `npm` GitHub

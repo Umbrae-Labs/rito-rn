@@ -1,0 +1,50 @@
+name: Build Rust prebuilt libraries
+on:
+  workflow_call:
+    inputs:
+      profile:
+        type: string
+        default: lunar
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: android
+            targets: aarch64-linux-android
+          - os: macos-15
+            platform: ios
+            targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+    runs-on: ${{ matrix.os }}
+    env:
+      RITO_ENGINE_PROFILE: ${{ inputs.profile }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: rustup toolchain install 1.95.0 --profile minimal --target '${{ matrix.targets }}'
+      - name: Install Android build tools
+        if: matrix.platform == 'android'
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;27.1.12297006'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
+          cargo +1.95.0 install cargo-ndk --version 4.1.2 --locked
+      - run: node scripts/engine.mjs export --profile "$RITO_ENGINE_PROFILE"
+      - run: node scripts/prebuilt.mjs build '${{ matrix.platform }}'
+      - name: Check Apple integration syntax
+        if: matrix.platform == 'ios'
+        run: |
+          ruby -c RitoNitro.podspec
+          bash -n scripts/build-ios.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prebuilt-${{ matrix.platform }}
+          path: prebuilt/
+          if-no-files-found: error

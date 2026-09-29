@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { root, verifyEngine } from './engine.mjs';
+import { platforms, verifyPrebuilt } from './prebuilt.mjs';
 
 verifyEngine();
 const command = process.platform === 'win32' ? 'cmd.exe' : 'npm';
@@ -10,6 +11,16 @@ const result = JSON.parse(execFileSync(command, args, {
   cwd: root, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
 }))[0];
 const names = new Set(result.files.map((file) => file.path));
+for (const platform of platforms) {
+  const directory = path.join(root, 'prebuilt', platform);
+  if (!fs.existsSync(directory)) continue; // Engine-update checks also run before native builds.
+  verifyPrebuilt(root, [platform]);
+  const manifestName = `prebuilt/${platform}/manifest.json`;
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, manifestName), 'utf8'));
+  for (const file of [manifestName, ...Object.keys(manifest.files).map((name) => `prebuilt/${platform}/${name}`)]) {
+    if (!names.has(file)) throw new Error(`Prebuilt artifact omitted from npm package: ${file}`);
+  }
+}
 for (const file of ['src/index.ts', 'app.plugin.js', 'plugin/index.js', 'android/build.gradle', 'android/CMakeLists.txt', 'RitoNitro.podspec', 'native/rito/Cargo.lock', 'native/rito/rito-source.json', 'native/rito/LICENSE', 'LICENSE', 'engine.lock.json']) {
   if (!names.has(file)) throw new Error(`Package is missing ${file}`);
 }
