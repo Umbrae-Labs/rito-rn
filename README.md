@@ -88,26 +88,6 @@ The Rust libraries target iOS 15.1 or newer. The application's minimum iOS versi
 must also satisfy its React Native version. The default pod configuration links
 the bundled library without adding a Rust compilation phase.
 
-## Engine profiles
-
-A published package contains one engine profile, selected during its release.
-Profiles determine the pinned engine source and patch series.
-
-| Profile | Source in the Rito fork | Local patches | npm tag |
-| --- | --- | --- | --- |
-| `lunar` | Pinned `dev` commit | Lunar patch series | `latest` |
-| `canary` | Pinned `dev` commit | None | `canary` |
-| `upstream-release` | Pinned `master` commit | None | `upstream-release` |
-
-`engine.lock.json` records exact commits and patch checksums. Branch names are
-resolved by explicit engine updates; application builds use the packaged artifacts.
-The `upstream-release` profile represents an official upstream release when its
-pinned commit corresponds to that release.
-
-The Lunar patch series includes compatibility handling for CSS sizing values such
-as `fit-content`. Some intrinsic sizes fall back to automatic sizing so pagination
-can continue.
-
 ## Source development
 
 To modify the engine or use a source-only archive, enable
@@ -128,25 +108,6 @@ tooling checks and packaging commands.
 | `patches` | Exported kernel patch series |
 | `native/rito` | Generated Rust source included in npm packages |
 | `prebuilt` | Generated Rust binaries and verification manifests |
-
-Generated sources and binaries are excluded from Git history and included during
-packaging. Consumer installation uses the npm package's contents.
-
-## Publishing
-
-Run [release.yml](.github/workflows/release.yml) from GitHub Actions with an engine
-profile and a new npm version. Leave `publish` disabled to download and inspect
-the verified archive, or enable it to publish through npm trusted publishing.
-Preview profiles require a prerelease version suffix.
-
-The release action calls [native-prebuilds.yml](.github/workflows/native-prebuilds.yml)
-to build Android and Apple libraries, collects both artifacts, verifies their
-engine identity, and packs the npm archive. Both platforms must pass before
-publication. [ci.yml](.github/workflows/ci.yml) runs the same native builds and
-package checks for pushes and pull requests.
-
-Trusted-publisher configuration, source-only development archives and fork
-synchronization are documented in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
