@@ -12,7 +12,7 @@ on:
         type: string
         required: true
       publish:
-        description: Publish the verified tarball using the npm environment
+        description: Publish to npm and create a GitHub Release with the verified tarball
         type: boolean
         default: false
 permissions:
@@ -102,3 +102,44 @@ jobs:
           RELEASE_TAG: ${{ steps.publication.outputs.tag }}
         run: |
           npm publish "$RELEASE_ARCHIVE" --access public --tag "$RELEASE_TAG"
+  github-release:
+    needs: release
+    if: inputs.publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RITO_ENGINE_PROFILE: ${{ inputs.profile }}
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-${{ inputs.profile }}-${{ inputs.version }}
+          path: artifacts
+      - name: Create GitHub Release after npm publication
+        run: |
+          archive="./artifacts/umbrae-labs-rito-rn-${RELEASE_VERSION}.tgz"
+          test -f "$archive"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const version = process.env.RELEASE_VERSION;
+          const notes = [
+            `npm: [@umbrae-labs/rito-rn@${version}](https://www.npmjs.com/package/@umbrae-labs/rito-rn/v/${version})`,
+            `Engine profile: ${process.env.RITO_ENGINE_PROFILE}`,
+            'The attached npm archive is the artifact verified and published by this run. It includes Android and iOS Rust prebuilts.',
+          ].join('\n\n') + '\n';
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'rito-release-notes.md'), notes);
+          NODE
+          options=()
+          if [[ "$RELEASE_VERSION" == *-* ]]; then
+            options+=(--prerelease --latest=false)
+          fi
+          gh release create "v${RELEASE_VERSION}" "$archive" \
+            --target "$GITHUB_SHA" \
+            --title "v${RELEASE_VERSION}" \
+            --generate-notes \
+            --notes-file "$RUNNER_TEMP/rito-release-notes.md" \
+            "${options[@]}"

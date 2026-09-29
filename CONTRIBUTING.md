@@ -137,6 +137,19 @@ environment using npm trusted publishing with GitHub OIDC and the following dist
 | canary | canary | 0.3.0-canary.1 |
 | upstream-release | upstream-release | 0.3.0-upstream.1 |
 
+After npm publication succeeds, a separate job creates a GitHub Release named
+`v<version>` and attaches the same verified npm archive. Its tag targets the
+commit used by the run; release notes include the engine profile, npm package
+link and GitHub-generated change notes. Prerelease versions are marked as
+prereleases and do not replace GitHub's latest release. With `publish` disabled,
+the archive remains an Actions artifact only.
+
+The GitHub Release job alone receives `contents: write` through `GITHUB_TOKEN`;
+it needs no additional repository secret. If this job fails after npm publication,
+rerun the failed job rather than starting another npm publication of that version.
+If GitHub created a partial release before the failure, inspect that release and
+its assets before retrying creation.
+
 Preview profiles require a prerelease version. The release job runs on a
 GitHub-hosted runner with Node 24, checks npm >=11.5.1, and grants `id-token: write`.
 It uses no `NPM_TOKEN` secret. Package-manager caching is disabled for this job.
