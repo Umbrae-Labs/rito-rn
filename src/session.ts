@@ -9,7 +9,7 @@ import {
   type RitoBackgroundRequest, type RitoForegroundHandoff,
 } from './protocol/requests';
 import type { RitoArtifact, RitoBackgroundAdvance, RitoBackgroundHandoffAck, RitoForegroundHandoffAck, RitoPublication, RitoResource } from './protocol/artifact-types';
-import { decodeRitoFootnote, decodeRitoSearchResponse, decodeRitoTextRangeGeometry, encodeRitoSearchRequest, encodeRitoTextRangeRequest, type RitoFootnote, type RitoSearchRequest, type RitoSearchResponse, type RitoTextRangeGeometry, type RitoTextRangeRequest } from './protocol/interaction';
+import { decodeRitoExactSourceRangeResolution, decodeRitoFootnote, decodeRitoSearchResponse, decodeRitoTextRangeGeometry, encodeRitoExactSourceRangeRequest, encodeRitoSearchRequest, encodeRitoTextRangeRequest, type RitoExactSourceRangeRequest, type RitoExactSourceRangeResolution, type RitoFootnote, type RitoSearchRequest, type RitoSearchResponse, type RitoTextRangeGeometry, type RitoTextRangeRequest } from './protocol/interaction';
 
 const STATUS_OK = 0;
 const STATUS_TARGET_NOT_PUBLISHED = 6;
@@ -333,6 +333,7 @@ export class RitoReaderSession {
   }
   async search(request: RitoSearchRequest): Promise<RitoSearchResponse> { this.assertSession(request.sessionId); this.assertArtifact(request.artifactId); const response = decodeRitoSearchResponse(await this.success('search', () => this.native.search(this.sessionId, encodeRitoSearchRequest(request)))); if (response.artifactId !== request.artifactId || response.query !== request.query) throw new RitoNativeError(4, 'Search response does not match the request.', 'search'); return response; }
   async textRangeGeometry(request: RitoTextRangeRequest): Promise<RitoTextRangeGeometry> { this.assertSession(request.sessionId); this.assertArtifact(request.artifactId); const response = decodeRitoTextRangeGeometry(await this.success('textRangeGeometry', () => this.native.textRangeGeometry(this.sessionId, encodeRitoTextRangeRequest(request)))); if (response.artifactId !== request.artifactId || response.pageIndex !== request.pageIndex) throw new RitoNativeError(4, 'Text geometry response does not match the request.', 'textRangeGeometry'); return response; }
+  async resolveExactSourceRange(request: RitoExactSourceRangeRequest): Promise<RitoExactSourceRangeResolution> { this.assertSession(request.sessionId); this.assertArtifact(request.artifactId); const response = decodeRitoExactSourceRangeResolution(await this.success('resolveExactSourceRange', () => this.native.resolveExactSourceRange(this.sessionId, encodeRitoExactSourceRangeRequest(request)))); if (response.artifactId !== request.artifactId) throw new RitoNativeError(4, 'Exact source range response does not match the request.', 'resolveExactSourceRange'); return response; }
   async readFootnote(artifactId: bigint, key: string): Promise<RitoFootnote> { this.assertArtifact(artifactId); const response = decodeRitoFootnote(await this.success('readFootnote', () => this.native.readFootnote(this.sessionId, artifactId, key))); if (response.artifactId !== artifactId || response.key !== key) throw new RitoNativeError(4, 'Footnote response does not match the request.', 'readFootnote'); return response; }
   async releaseArtifact(artifactId: bigint): Promise<void> {
     this.assertArtifact(artifactId);

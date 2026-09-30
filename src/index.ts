@@ -20,7 +20,9 @@ export {
   decodeRitoFootnote,
   decodeRitoSearchResponse,
   decodeRitoTextRangeGeometry,
+  decodeRitoExactSourceRangeResolution,
   encodeRitoSearchRequest,
+  encodeRitoExactSourceRangeRequest,
   encodeRitoTextRangeRequest,
 } from './protocol/interaction';
 export type * from './protocol/interaction';

@@ -1,6 +1,6 @@
 import { RitoWireError } from '../errors';
 import { RitoBinaryReader, RitoBinaryWriter } from './binary';
-import type { RitoLocator, RitoRect } from './artifact-types';
+import type { RitoLocator, RitoRect, RitoSourceRange } from './artifact-types';
 import { readRitoLocator } from './locator';
 
 export interface RitoTextPosition { readonly blockIndex: number; readonly lineIndex: number; readonly runIndex: number; readonly charIndex: number }
@@ -10,6 +10,16 @@ export interface RitoSearchResponse { readonly artifactId: bigint; readonly quer
 export interface RitoTextRangeRequest { readonly sessionId: bigint; readonly artifactId: bigint; readonly pageIndex: number; readonly start: RitoTextPosition; readonly end: RitoTextPosition }
 export interface RitoTextRect { readonly bounds: RitoRect; readonly blockIndex: number; readonly lineIndex: number; readonly runIndex: number; readonly startCharIndex: number; readonly endCharIndex: number }
 export interface RitoTextRangeGeometry { readonly artifactId: bigint; readonly pageIndex: number; readonly rects: readonly RitoTextRect[] }
+export interface RitoExactSourceRangeRequest { readonly sessionId: bigint; readonly artifactId: bigint; readonly href: string; readonly range: RitoSourceRange }
+export type RitoExactSourceRangeStatus = 'resolved' | 'pending' | 'unavailable';
+export interface RitoExactSourceRect extends RitoTextRect { readonly pageIndex: number }
+export interface RitoExactSourceRangeResolution {
+  readonly artifactId: bigint;
+  readonly status: RitoExactSourceRangeStatus;
+  readonly firstPageIndex?: number;
+  readonly selectedText: string;
+  readonly rects: readonly RitoExactSourceRect[];
+}
 export type RitoFootnoteKind = 'footnote' | 'endnote' | 'rearnote' | 'note';
 export interface RitoFootnote { readonly artifactId: bigint; readonly key: string; readonly kind: RitoFootnoteKind; readonly text: string; readonly html: string }
 
@@ -26,6 +36,15 @@ export function encodeRitoTextRangeRequest(request: RitoTextRangeRequest): Uint8
   return bytes;
 }
 
+export function encodeRitoExactSourceRangeRequest(request: RitoExactSourceRangeRequest): Uint8Array {
+  const writer = message('RITOESQ1').writeU64(request.sessionId).writeU64(request.artifactId).writeUtf8(request.href);
+  writer.writeRecord((record) => {
+    writeSourcePoint(record, request.range.start);
+    writeSourcePoint(record, request.range.end);
+  });
+  return finish(writer);
+}
+
 export function decodeRitoSearchResponse(data: Uint8Array): RitoSearchResponse {
   const reader = open(data, 'RITOSRS1');
   const result = { artifactId: reader.readExternalId('search artifact id'), query: reader.readUtf8(), truncated: reader.readBoolean('search truncated'), searchedPageCount: reader.readU32(), results: Array.from({ length: reader.readCount('search results') }, () => reader.readRecord('search result', readSearchResult)) };
@@ -36,6 +55,24 @@ export function decodeRitoTextRangeGeometry(data: Uint8Array): RitoTextRangeGeom
   const reader = open(data, 'RITOTRG1');
   const result = { artifactId: reader.readExternalId('text geometry artifact id'), pageIndex: reader.readU32(), rects: Array.from({ length: reader.readCount('text range rects') }, () => reader.readRecord('text range rect', readTextRect)) };
   reader.expectExhausted(); return result;
+}
+
+export function decodeRitoExactSourceRangeResolution(data: Uint8Array): RitoExactSourceRangeResolution {
+  const reader = open(data, 'RITOESR1');
+  const artifactId = reader.readExternalId('exact source range artifact id');
+  const statusTag = reader.readU32();
+  const status = statusTag === 0 ? 'resolved' : statusTag === 1 ? 'pending' : statusTag === 2 ? 'unavailable' : undefined;
+  if (!status) throw new RitoWireError(`Unknown exact source range status: ${statusTag}.`);
+  const firstPageIndex = reader.readOption('exact source range first page', () => reader.readU32());
+  const selectedText = reader.readUtf8();
+  const rects = Array.from({ length: reader.readCount('exact source rects') }, () => reader.readRecord('exact source rect', (record) => ({
+    pageIndex: record.readU32(),
+    bounds: { x: record.readF64(), y: record.readF64(), width: record.readF64(), height: record.readF64() },
+    blockIndex: record.readU32(), lineIndex: record.readU32(), runIndex: record.readU32(),
+    startCharIndex: record.readU32(), endCharIndex: record.readU32(),
+  })));
+  reader.expectExhausted();
+  return { artifactId, status, firstPageIndex, selectedText, rects };
 }
 
 export function decodeRitoFootnote(data: Uint8Array): RitoFootnote {
@@ -52,6 +89,13 @@ export function decodeRitoFootnote(data: Uint8Array): RitoFootnote {
 function readSearchResult(reader: RitoBinaryReader): RitoSearchResult { return { pageIndex: reader.readU32(), spreadIndex: reader.readU32(), start: readPosition(reader), end: readPosition(reader), context: reader.readUtf8(), locator: reader.readOption('search locator', () => readRitoLocator(reader, 'search locator')) }; }
 function readPosition(reader: RitoBinaryReader): RitoTextPosition { return { blockIndex: reader.readU32(), lineIndex: reader.readU32(), runIndex: reader.readU32(), charIndex: reader.readU32() }; }
 function writePosition(writer: RitoBinaryWriter, value: RitoTextPosition): void { writer.writeU32(value.blockIndex).writeU32(value.lineIndex).writeU32(value.runIndex).writeU32(value.charIndex); }
+function writeSourcePoint(writer: RitoBinaryWriter, value: RitoSourceRange['start']): void {
+  writer.writeRecord((record) => {
+    record.writeU32(value.nodePath.length);
+    for (const part of value.nodePath) record.writeU32(part);
+    record.writeU64(BigInt(value.textOffset));
+  });
+}
 function readTextRect(reader: RitoBinaryReader): RitoTextRect { return { bounds: { x: reader.readF64(), y: reader.readF64(), width: reader.readF64(), height: reader.readF64() }, blockIndex: reader.readU32(), lineIndex: reader.readU32(), runIndex: reader.readU32(), startCharIndex: reader.readU32(), endCharIndex: reader.readU32() }; }
 function message(magic: string): RitoBinaryWriter { return new RitoBinaryWriter().writeAscii(magic).writeU32(1).writeU64(0n); }
 function finish(writer: RitoBinaryWriter): Uint8Array { const bytes = writer.toUint8Array(); new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setBigUint64(12, BigInt(bytes.byteLength), true); return bytes; }

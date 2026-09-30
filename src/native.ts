@@ -47,6 +47,7 @@ export interface RitoNativeReaderModule {
   readResource(sessionId: bigint, artifactId: bigint, kind: number, href: string): Promise<RitoNativeCallResult>;
   search(sessionId: bigint, request: Uint8Array): Promise<RitoNativeCallResult>;
   textRangeGeometry(sessionId: bigint, request: Uint8Array): Promise<RitoNativeCallResult>;
+  resolveExactSourceRange(sessionId: bigint, request: Uint8Array): Promise<RitoNativeCallResult>;
   readFootnote(sessionId: bigint, artifactId: bigint, key: string): Promise<RitoNativeCallResult>;
   releaseArtifact(sessionId: bigint, artifactId: bigint): Promise<RitoNativeCallResult>;
   dispose(sessionId: bigint): Promise<RitoNativeCallResult>;
@@ -96,6 +97,7 @@ class RitoNitroReaderModule implements RitoNativeReaderModule {
   readResource(sessionId: bigint, artifactId: bigint, kind: number, href: string) { return this.unwrap('readResource', this.native.readResource(toExternalIdString(sessionId), toExternalIdString(artifactId), kind, href)); }
   search(sessionId: bigint, request: Uint8Array) { return this.unwrap('search', this.native.search(toExternalIdString(sessionId), toArrayBuffer(request))); }
   textRangeGeometry(sessionId: bigint, request: Uint8Array) { return this.unwrap('textRangeGeometry', this.native.textRangeGeometry(toExternalIdString(sessionId), toArrayBuffer(request))); }
+  resolveExactSourceRange(sessionId: bigint, request: Uint8Array) { return this.unwrap('resolveExactSourceRange', this.native.resolveExactSourceRange(toExternalIdString(sessionId), toArrayBuffer(request))); }
   readFootnote(sessionId: bigint, artifactId: bigint, key: string) { return this.unwrap('readFootnote', this.native.readFootnote(toExternalIdString(sessionId), toExternalIdString(artifactId), key)); }
   releaseArtifact(sessionId: bigint, artifactId: bigint) { return this.unwrap('releaseArtifact', this.native.releaseArtifact(toExternalIdString(sessionId), toExternalIdString(artifactId))); }
   dispose(sessionId: bigint) { return this.unwrap('dispose', this.native.disposeSession(toExternalIdString(sessionId))); }

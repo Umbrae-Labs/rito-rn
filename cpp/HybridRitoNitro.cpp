@@ -176,6 +176,7 @@ RITO_WIRE_METHOD(advanceBackground, rito_advance_background)
 RITO_WIRE_METHOD(adoptBackground, rito_adopt_background_candidate)
 RITO_WIRE_METHOD(search, rito_search)
 RITO_WIRE_METHOD(textRangeGeometry, rito_get_text_range_geometry)
+RITO_WIRE_METHOD(resolveExactSourceRange, rito_resolve_exact_source_range)
 
 #undef RITO_WIRE_METHOD
 

@@ -68,6 +68,7 @@ namespace margelo::nitro::ritonitro {
       virtual std::shared_ptr<Promise<RitoNitroResult>> readResource(const std::string& sessionId, const std::string& artifactId, double kind, const std::string& href) = 0;
       virtual std::shared_ptr<Promise<RitoNitroResult>> search(const std::string& sessionId, const std::shared_ptr<ArrayBuffer>& request) = 0;
       virtual std::shared_ptr<Promise<RitoNitroResult>> textRangeGeometry(const std::string& sessionId, const std::shared_ptr<ArrayBuffer>& request) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> resolveExactSourceRange(const std::string& sessionId, const std::shared_ptr<ArrayBuffer>& request) = 0;
       virtual std::shared_ptr<Promise<RitoNitroResult>> readFootnote(const std::string& sessionId, const std::string& artifactId, const std::string& key) = 0;
       virtual std::shared_ptr<Promise<RitoNitroResult>> releaseArtifact(const std::string& sessionId, const std::string& artifactId) = 0;
       virtual std::shared_ptr<Promise<RitoNitroResult>> disposeSession(const std::string& sessionId) = 0;
