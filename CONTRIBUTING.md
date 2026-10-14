@@ -20,6 +20,11 @@ SHA-256 checksums. Branch names are used only by the explicit update command.
 Neither installation nor ordinary export fetches a moving branch. A shallow
 development checkout may fetch a missing pinned commit by its full SHA.
 
+The recorded submodule pointer always equals `lunar.commit`; `engine:verify`
+rejects any other committed or staged pointer. Topic branches only move the
+checked-out commit. Do not stage `upstream/rito` while it points at a topic branch
+or a newer fork commit; record a new base through `engine:update`.
+
 ## Editing a kernel patch
 
 Start a topic branch at the `lunar.commit` in `engine.lock.json`. On a fresh
@@ -64,7 +69,8 @@ git add engine.lock.json upstream/rito
 
 For other profiles use `canary` with `dev`, or `upstream-release` with `master`.
 An update resolves a full commit, checks every patch and exports a candidate.
-A patch failure restores the old lock file. Existing releases remain identified
+A patch failure restores the old lock file. Updating the default profile also
+detaches the submodule at the new base and stages its pointer. Existing releases remain identified
 by their package version and provenance manifest.
 
 The scheduled adapter action proposes changes from the fork. Install
@@ -196,5 +202,9 @@ References: [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
 and [npm trust prerequisites](https://docs.npmjs.com/cli/v11/commands/npm-trust/).
 
 Consumers pin a concrete version. The dist-tags identify release channels; they
-are not reproducible build inputs. Lunar consumes the exact npm registry version
-`@umbrae-labs/rito-rn@0.2.0`, so its repository builds without this development checkout.
+are not reproducible build inputs. Lunar pins an exact npm registry version in
+`apps/mobile/package.json`, so its repository builds without this development checkout.
+
+The release action sets the package version from its input without committing it.
+After a publication, set `package.json` here to the published version so the
+repository names the latest release.

@@ -1,6 +1,6 @@
 {
   "name": "@umbrae-labs/rito-rn",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "React Native adaptation for Rito, incorporating the patched Lunar Rito core.",
   "repository": {
     "type": "git",

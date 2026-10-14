@@ -127,6 +127,14 @@ export function exportEngine(name) {
   return provenance;
 }
 
+// Installed packages and unpacked archives have no submodule entry, so the pointer check is skipped there.
+function recordedCheckout() {
+  try {
+    const entry = execFileSync('git', ['-C', root, 'ls-files', '--stage', '--', 'upstream/rito'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return entry.startsWith('160000 ') ? entry.split(/\s+/)[1] : null;
+  } catch { return null; }
+}
+
 export function verifyEngine(directory = path.join(root, 'native/rito')) {
   const provenance = json(path.join(directory, 'rito-source.json'));
   const actual = fileHashes(directory);
@@ -135,6 +143,10 @@ export function verifyEngine(directory = path.join(root, 'native/rito')) {
   const profile = profileConfig(lock, provenance.profile);
   if (profile.commit !== provenance.commit || lock.repository !== provenance.repository || lock.rustVersion !== provenance.rustVersion || JSON.stringify(profile.patches) !== JSON.stringify(provenance.patches)) throw new Error('Export is stale relative to engine.lock.json');
   for (const patch of profile.patches) if (hash(fs.readFileSync(inside(root, patch.file))) !== patch.sha256) throw new Error(`Patch checksum mismatch: ${patch.file}`);
+  if (directory === path.join(root, 'native/rito') && provenance.profile === lock.defaultProfile) {
+    const recorded = recordedCheckout();
+    if (recorded && recorded !== profile.commit) throw new Error('upstream/rito pointer differs from the default profile base; check out the locked commit and stage the submodule');
+  }
   console.log(`Verified ${Object.keys(actual).length} Rust source files (${provenance.profile})`);
   return provenance;
 }
@@ -179,7 +191,10 @@ async function main() {
     const old = fs.readFileSync(lockPath);
     writeJson(lockPath, lock);
     try { exportEngine(name); } catch (error) { fs.writeFileSync(lockPath, old); throw error; }
-    if (name === lock.defaultProfile) git('checkout', '--detach', profile.commit);
+    if (name === lock.defaultProfile) {
+      git('checkout', '--detach', profile.commit);
+      execFileSync('git', ['-C', root, 'add', 'upstream/rito']);
+    }
     console.log('Review engine.lock.json, the submodule pointer, compatibility tests and generated package before committing');
   } else if (command === 'test') {
     const { workspace } = materialize(name);
