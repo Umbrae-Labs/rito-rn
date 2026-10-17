@@ -42,7 +42,7 @@ export function verifyPrebuilt(packageRoot = root, selected = platforms) {
     const manifestPath = path.join(directory, 'manifest.json');
     if (!fs.existsSync(manifestPath)) throw new Error(`Missing ${platform} prebuilt library. Use an official binary package or explicitly enable RITO_BUILD_FROM_SOURCE=1.`);
     const manifest = readJson(manifestPath);
-    if (manifest.schema !== 1 || manifest.platform !== platform || manifest.sourceSha256 !== sourceDigest(source)) throw new Error(`Stale ${platform} prebuilt library: engine profile, patches or sources differ`);
+    if (manifest.schema !== 1 || manifest.platform !== platform || manifest.sourceSha256 !== sourceDigest(source)) throw new Error(`Stale ${platform} prebuilt library: engine profile, revision or sources differ`);
     if (!manifest.files || typeof manifest.files !== 'object') throw new Error('Missing binary hashes');
     for (const file of Object.keys(manifest.files)) inside(directory, file);
     for (const file of required[platform]) {

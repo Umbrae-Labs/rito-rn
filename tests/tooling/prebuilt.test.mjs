@@ -20,7 +20,7 @@ function fixture(t) {
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.writeFileSync(destination, contents);
   };
-  const source = { schema: 1, profile: 'lunar', commit: 'a'.repeat(40), rustVersion: '1.95.0', patches: [{ sha256: 'b'.repeat(64) }], files: { [header]: hash('header') } };
+  const source = { schema: 1, profile: 'lunar', commit: 'a'.repeat(40), rustVersion: '1.95.0', files: { [header]: hash('header') } };
   const manifest = { schema: 1, platform: 'android', sourceSha256: sourceDigest(source), files: { [library]: hash('archive') } };
   const saveSource = () => put('native/rito/rito-source.json', JSON.stringify(source));
   const saveManifest = () => put('prebuilt/android/manifest.json', JSON.stringify(manifest));
@@ -46,9 +46,9 @@ test('binary checksums catch modified archives and undeclared files', (t) => {
   assert.throws(() => verifyPrebuilt(f.root, ['android']), /checksum mismatch/);
 });
 
-test('changing patches or source hashes invalidates the binary', (t) => {
+test('changing the engine revision or source hashes invalidates the binary', (t) => {
   const f = fixture(t);
-  f.source.patches[0].sha256 = 'c'.repeat(64);
+  f.source.commit = 'c'.repeat(40);
   f.saveSource();
   assert.throws(() => verifyPrebuilt(f.root, ['android']), /Stale android/);
 });
@@ -71,7 +71,7 @@ test('consumer header must match the binary source manifest', (t) => {
 
 test('source digest is independent of object insertion order across build hosts', () => {
   assert.equal(sourceDigest({ profile: 'lunar', files: { z: '1', a: '2' } }), sourceDigest({ files: { a: '2', z: '1' }, profile: 'lunar' }));
-  assert.notEqual(sourceDigest({ patches: ['first', 'second'] }), sourceDigest({ patches: ['second', 'first'] }));
+  assert.notEqual(sourceDigest({ commit: 'a'.repeat(40) }), sourceDigest({ commit: 'b'.repeat(40) }));
 });
 
 test('XCFramework requires both device and simulator libraries with matching headers', (t) => {

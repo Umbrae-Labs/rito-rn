@@ -15,6 +15,10 @@ export interface RitoLayoutRequest {
   readonly lineHeightOverride?: number;
   readonly fontFamilyOverride?: string;
   readonly renderRatio?: number;
+  /** Whether the line-height override outranks the publication's own declarations; defaults to true. */
+  readonly lineHeightForce?: boolean;
+  /** Whether the font-family override outranks the publication's own declarations; defaults to true. */
+  readonly fontFamilyForce?: boolean;
 }
 
 export interface RitoLocator {
@@ -133,6 +137,8 @@ function writeLayout(writer: RitoBinaryWriter, value: RitoLayoutRequest): void {
   writeOption(writer, value.lineHeightOverride, (lineHeight) => writer.writeF64(lineHeight));
   writeOption(writer, value.fontFamilyOverride, (family) => writer.writeUtf8(family));
   writer.writeF64(value.renderRatio ?? 1);
+  writer.writeU8(value.lineHeightForce === false ? 0 : 1);
+  writer.writeU8(value.fontFamilyForce === false ? 0 : 1);
 }
 
 function writeLocator(writer: RitoBinaryWriter, value: RitoLocator): void {

@@ -97,7 +97,7 @@ and when building; rerun pod installation without it to return to precompiled mo
 
 Source builds require Rust 1.95.0 and the appropriate target toolchains. Android
 also requires cargo-ndk 4.1.2. `RITO_FFI_SOURCE_DIR` selects a custom Rust workspace
-and enables source mode. See [CONTRIBUTING.md](CONTRIBUTING.md) for kernel patches,
+and enables source mode. See [CONTRIBUTING.md](CONTRIBUTING.md) for kernel branches,
 tooling checks and packaging commands.
 
 | Directory | Purpose |
@@ -105,7 +105,6 @@ tooling checks and packaging commands.
 | `src` | TypeScript API, reader sessions and protocol handling |
 | `cpp`, `android`, `ios` | Nitro bridge and platform integration |
 | `upstream/rito` | Rito fork submodule for engine development |
-| `patches` | Exported kernel patch series |
 | `native/rito` | Generated Rust source included in npm packages |
 | `prebuilt` | Generated Rust binaries and verification manifests |
 

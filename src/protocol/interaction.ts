@@ -10,7 +10,11 @@ export interface RitoSearchResponse { readonly artifactId: bigint; readonly quer
 export interface RitoTextRangeRequest { readonly sessionId: bigint; readonly artifactId: bigint; readonly pageIndex: number; readonly start: RitoTextPosition; readonly end: RitoTextPosition }
 export interface RitoTextRect { readonly bounds: RitoRect; readonly blockIndex: number; readonly lineIndex: number; readonly runIndex: number; readonly startCharIndex: number; readonly endCharIndex: number }
 export interface RitoTextRangeGeometry { readonly artifactId: bigint; readonly pageIndex: number; readonly rects: readonly RitoTextRect[] }
-export interface RitoExactSourceRangeRequest { readonly sessionId: bigint; readonly artifactId: bigint; readonly href: string; readonly range: RitoSourceRange }
+export interface RitoExactSourceRangeRequest {
+  readonly sessionId: bigint; readonly artifactId: bigint; readonly href: string; readonly range: RitoSourceRange;
+  /** Return rects for every page the range covers, not only the pages this artifact draws. */
+  readonly everyPage?: boolean;
+}
 export type RitoExactSourceRangeStatus = 'resolved' | 'pending' | 'unavailable';
 export interface RitoExactSourceRect extends RitoTextRect { readonly pageIndex: number }
 export interface RitoExactSourceRangeResolution {
@@ -42,6 +46,7 @@ export function encodeRitoExactSourceRangeRequest(request: RitoExactSourceRangeR
     writeSourcePoint(record, request.range.start);
     writeSourcePoint(record, request.range.end);
   });
+  writer.writeU8(request.everyPage ? 1 : 0);
   return finish(writer);
 }
 

@@ -36,6 +36,6 @@ jobs:
             engine.lock.json
             upstream/rito
           body: |
-            Updates the exact engine commit. Existing exported patches were checked and applied.
+            Updates the exact engine commit to the head of the profile's fork branch.
             Adapter tests, package validation and Rust tests passed before this PR was created.
             Review native device behavior before adopting the new package in Lunar.

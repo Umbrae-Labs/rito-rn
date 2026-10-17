@@ -2,7 +2,20 @@
 
 The adapter and kernel have separate editing locations. Edit TypeScript, Nitro,
 C++ and platform integration in this repository. Edit Rust in `upstream/rito`,
-on a topic branch of the Rito fork. `native/rito`, `prebuilt` and `.engine` are generated.
+a submodule of the Rito fork. `native/rito`, `prebuilt` and `.engine` are generated.
+
+## Fork branches
+
+| Branch | Role | Profile |
+| --- | --- | --- |
+| `lunar` | Engine used by Lunar: upstream `dev` plus Lunar commits | `lunar` |
+| `dev` | Mirror of Ringyuki/Rito `dev` | `canary` |
+| `master` | Mirror of Ringyuki/Rito `master` | `upstream-release` |
+| `fix/*`, `feat/*` | One upstream PR each, based on `dev` | none |
+
+`dev` and `master` carry no fork commits; update them only by fast-forwarding to
+Ringyuki/Rito. `lunar` advances by merging `dev` and by Lunar commits. Never
+rebase or force-push `lunar`: released packages pin its commits by SHA.
 
 ## Initial checkout
 
@@ -14,71 +27,69 @@ pnpm run engine:export
 pnpm run check
 ```
 
-The submodule records the default profile's public base commit. `engine.lock.json`
-records the exact base for each profile, plus ordered exported patches and their
-SHA-256 checksums. Branch names are used only by the explicit update command.
-Neither installation nor ordinary export fetches a moving branch. A shallow
-development checkout may fetch a missing pinned commit by its full SHA.
+`engine.lock.json` records each profile's fork branch and the exact commit built
+from it. Branch names are used only by the explicit update command. Neither
+installation nor ordinary export fetches a moving branch. A shallow development
+checkout may fetch a missing pinned commit by its full SHA.
 
 The recorded submodule pointer always equals `lunar.commit`; `engine:verify`
-rejects any other committed or staged pointer. Topic branches only move the
-checked-out commit. Do not stage `upstream/rito` while it points at a topic branch
-or a newer fork commit; record a new base through `engine:update`.
+rejects any other committed or staged pointer. Working branches only move the
+checked-out commit. Do not stage `upstream/rito` by hand; record a new commit
+through `engine:update`.
 
-## Editing a kernel patch
+## Changing the kernel
 
-Start a topic branch at the `lunar.commit` in `engine.lock.json`. On a fresh
-checkout, apply the profile's existing patches in manifest order with `git am`
-before adding further commits. A local branch containing the current patch
-stack can also be used. Keep each upstream candidate focused and tested.
+Lunar-only changes are committed to `lunar`. A fix meant for upstream starts
+from `dev` on its own branch, opens a PR against Ringyuki/Rito `dev`, and is
+merged into `lunar` when Lunar needs it before upstream releases it. Once
+upstream merges the PR, the next `dev` merge into `lunar` brings it back.
 
 ```sh
-git -C upstream/rito switch -c fix/my-change <locked-base-sha>
-git -C upstream/rito am ../../patches/<existing-patch>.patch
-# Edit and test the Rust sources, then commit in upstream/rito.
-pnpm run engine:capture -- --profile lunar --head fix/my-change
-git -C upstream/rito checkout --detach <locked-base-sha>
-pnpm run engine:export
+git -C upstream/rito switch -c fix/my-change origin/dev
+# Edit, test and commit; push the branch and open the upstream PR.
+git -C upstream/rito switch lunar
+git -C upstream/rito merge fix/my-change
+git -C upstream/rito push origin lunar
+git -C upstream/rito checkout --detach
+pnpm run engine:update -- --profile lunar
 pnpm run engine:test
 pnpm run check
 ```
 
-Capture replaces the profile's complete patch series with the linear commits
-between its base and `--head`; include all patches that should remain. Patch
-files are generated transport artifacts, not a second hand-edited source tree.
-Their `sourceCommit` and subject identify the original commits. This also makes
-CI builds possible before a new topic branch has been pushed to the fork.
+Every engine build input must be a pushed fork commit; CI fetches it by SHA.
 
-Push a focused topic branch to the fork when ready to open an upstream PR.
-Record its URL in the corresponding patch's `upstreamPr` field. When the fix is
-included in a later base, remove that patch entry before exporting the upgrade.
-An already-applied or conflicting patch intentionally stops the upgrade for review.
-
-The initial CSS fix is available locally on `fix/css-sizing-fallback`, commit
-`d5b620862d9d330fe5326e1974ee7ed05ab8967b`. Its generated patch is included in this
-repository. No remote push is required to build it.
-
-## Updating the base
+## Updating from upstream
 
 ```sh
-pnpm run engine:update -- --profile lunar --ref dev
+gh repo sync Saramanda9988/Rito --branch dev
+gh repo sync Saramanda9988/Rito --branch master
+git -C upstream/rito fetch origin
+git -C upstream/rito switch lunar
+git -C upstream/rito merge origin/dev
+git -C upstream/rito push origin lunar
+git -C upstream/rito checkout --detach
+pnpm run engine:update -- --profile lunar
 pnpm run engine:test
 pnpm run check
 git add engine.lock.json upstream/rito
 ```
 
-For other profiles use `canary` with `dev`, or `upstream-release` with `master`.
-An update resolves a full commit, checks every patch and exports a candidate.
-A patch failure restores the old lock file. Updating the default profile also
-detaches the submodule at the new base and stages its pointer. Existing releases remain identified
-by their package version and provenance manifest.
+`canary` and `upstream-release` follow `dev` and `master` the same way through
+`engine:update -- --profile <name>`; their export replaces `native/rito`, so
+export `lunar` again before committing. An update resolves the branch head to a
+full commit and exports a candidate; a failed export restores the old lock file.
+Updating the default profile also detaches the submodule at the new commit and
+stages its pointer. Existing releases remain identified by their package version
+and provenance manifest.
 
-The scheduled adapter action proposes changes from the fork. Install
-`templates/sync-fork.yml` in the fork as `.github/workflows/sync-upstream.yml`
-to update its `master` and `dev` branches from Ringyuki/Rito. The action fast-forwards
-where possible and otherwise merges, preserving the fork's automation commit.
-Conflicts stop the action; neither branch is force-pushed. Keep kernel fixes on
-topic branches so each upstream PR has an isolated change set.
+A changed engine can change the wire protocol. Review the commits between the
+old and new base for `RITO*` message, `READER_PROTOCOL_VERSION` and `RITODL1`
+changes, update `src/protocol` with them, and refresh `src/protocol/rito2` and
+its fixtures from the same upstream commit.
+
+The scheduled adapter action proposes lock updates for every profile from the
+fork branches. It does not update the fork itself; sync `dev` and `master`
+first.
 
 ## Tests and package checks
 
@@ -101,7 +112,7 @@ not an automatic Lunar dependency upgrade.
 
 Use a new package version for every changed artifact. The package version belongs
 to the adapter and need not equal the engine version. Review `native/rito/rito-source.json`
-for its base, patch series, toolchain and file hashes.
+for its fork branch, commit, toolchain and file hashes.
 
 ```sh
 pnpm run engine:export

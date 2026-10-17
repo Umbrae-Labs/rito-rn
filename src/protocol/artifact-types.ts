@@ -3,6 +3,7 @@ import type { RitoReaderPrimitiveList } from './rito2/reader-session-primitive';
 export type RitoLocatorMatch = 'source-range' | 'source-point' | 'anchor' | 'progression' | 'href';
 export type RitoTextProfile = 'platform-string-runs' | 'positioned-glyph-runs';
 export type RitoResourceKind = 'image' | 'font' | 'stylesheet';
+export type RitoHitKind = 'text' | 'link' | 'image' | 'footnote' | 'footnote-pending';
 export type RitoAdjacentAvailability = 'available' | 'chapter-boundary' | 'terminal';
 export type RitoSemanticRole = 'heading' | 'paragraph' | 'list' | 'list-item' | 'image' | 'link' | 'blockquote' | 'table' | 'generic';
 
@@ -27,9 +28,9 @@ export interface RitoResource {
   readonly bytes: Uint8Array; readonly width?: number; readonly height?: number;
 }
 export interface RitoHitEntry {
-  readonly pageIndex: number; readonly bounds: RitoRect; readonly text: string; readonly href?: string;
-  readonly sourcePoint?: RitoSourcePoint; readonly imageSrc?: string; readonly imageAlt?: string;
-  readonly footnoteKey?: string; readonly footnotePending: boolean;
+  readonly pageIndex: number; readonly bounds: RitoRect; readonly kind: RitoHitKind; readonly text: string; readonly href?: string;
+  readonly sourcePoint?: RitoSourcePoint; readonly targetLocator?: RitoLocator; readonly destinationLabel?: string;
+  readonly imageSrc?: string; readonly imageAlt?: string; readonly footnoteKey?: string;
 }
 export interface RitoSemanticNode {
   readonly role: RitoSemanticRole; readonly level?: number; readonly text?: string; readonly alt?: string;

@@ -1,7 +1,7 @@
 {
   "name": "@umbrae-labs/rito-rn",
   "version": "0.2.2",
-  "description": "React Native adaptation for Rito, incorporating the patched Lunar Rito core.",
+  "description": "React Native adaptation for Rito, built from the Lunar branch of the Rito fork.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Umbrae-Labs/rito-rn.git"
@@ -40,7 +40,6 @@
     "specs",
     "scripts",
     "plugin",
-    "patches",
     "engine.lock.json",
     "app.plugin.js",
     "RitoNitro.podspec",

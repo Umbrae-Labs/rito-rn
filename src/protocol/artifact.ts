@@ -2,7 +2,7 @@ import { RitoWireError } from '../errors';
 import { RitoBinaryReader } from './binary';
 import { decodeRitoReaderPrimitiveList } from './rito2/reader-session-primitive-decoder-runtime.js';
 import type {
-  RitoAdjacentAvailability, RitoArtifact, RitoDisplayListPayload, RitoFontRef, RitoHitEntry,
+  RitoAdjacentAvailability, RitoArtifact, RitoDisplayListPayload, RitoFontRef, RitoHitEntry, RitoHitKind,
   RitoLocatorMatch, RitoNavigation, RitoPage, RitoRect, RitoResourceKind, RitoResourceRef,
   RitoSemanticNode, RitoSemanticRole, RitoTextProfile, RitoTextRunOffset,
 } from './artifact-types';
@@ -13,7 +13,7 @@ const MAX_WIRE_BYTES = 256 * 1024 * 1024;
 export function decodeRitoArtifact(data: Uint8Array): RitoArtifact {
   const reader = openMessage(data, 'RITOART1', MAX_WIRE_BYTES, 'artifact');
   const protocolVersion = reader.readU32();
-  if (protocolVersion !== 5) throw new RitoWireError(`Unsupported artifact protocol version: ${protocolVersion}.`);
+  if (protocolVersion !== 6) throw new RitoWireError(`Unsupported artifact protocol version: ${protocolVersion}.`);
   const capabilityProfileId = reader.readU32();
   if (capabilityProfileId !== 1) throw new RitoWireError(`Unsupported capability profile: ${capabilityProfileId}.`);
   const result: RitoArtifact = {
@@ -101,7 +101,14 @@ function readPage(reader: RitoBinaryReader): RitoPage {
 }
 
 function readHit(reader: RitoBinaryReader): RitoHitEntry {
-  return { pageIndex: reader.readU32(), bounds: readRect(reader), text: reader.readUtf8(), href: reader.readOption('hit href', () => reader.readUtf8()), sourcePoint: reader.readOption('hit source point', () => readRitoSourcePoint(reader)), imageSrc: reader.readOption('hit image source', () => reader.readUtf8()), imageAlt: reader.readOption('hit image alternative', () => reader.readUtf8()), footnoteKey: reader.readOption('hit footnote key', () => reader.readUtf8()), footnotePending: reader.readBoolean('hit footnote pending') };
+  return { pageIndex: reader.readU32(), bounds: readRect(reader), kind: readHitKind(reader), text: reader.readUtf8(), href: reader.readOption('hit href', () => reader.readUtf8()), sourcePoint: reader.readOption('hit source point', () => readRitoSourcePoint(reader)), targetLocator: reader.readOption('hit target locator', () => readRitoLocator(reader, 'hit target locator')), destinationLabel: reader.readOption('hit destination label', () => reader.readUtf8()), imageSrc: reader.readOption('hit image source', () => reader.readUtf8()), imageAlt: reader.readOption('hit image alternative', () => reader.readUtf8()), footnoteKey: reader.readOption('hit footnote key', () => reader.readUtf8()) };
+}
+
+function readHitKind(reader: RitoBinaryReader): RitoHitKind {
+  const tag = reader.readU8();
+  const value = (['text', 'link', 'image', 'footnote', 'footnote-pending'] as const)[tag];
+  if (!value) throw new RitoWireError(`Unknown hit kind: ${tag}.`);
+  return value;
 }
 
 function readSemantic(reader: RitoBinaryReader, depth: number): RitoSemanticNode {

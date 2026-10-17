@@ -8,7 +8,7 @@ import { fileHashes, hash, inside, profileConfig, registryPins } from '../../scr
 test('generation rejects escaping destinations and floating revisions', () => {
   assert.throws(() => inside(os.tmpdir(), '../outside'));
   assert.throws(() => inside(os.tmpdir(), '.'));
-  assert.throws(() => profileConfig({ profiles: { lunar: { commit: 'dev', patches: [] } } }, 'lunar'));
+  assert.throws(() => profileConfig({ profiles: { lunar: { ref: 'lunar', commit: 'dev' } } }, 'lunar'));
   assert.throws(() => profileConfig({ profiles: {} }, 'missing'));
 });
 

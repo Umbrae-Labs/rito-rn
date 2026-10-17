@@ -20,17 +20,42 @@ import { decodeRitoFootnote, decodeRitoSearchResponse, decodeRitoTextRangeGeomet
 import { decodeRitoArtifact, decodeRitoResource } from '../../src/protocol/artifact';
 import { decodeRitoPublication } from '../../src/protocol/publication';
 
+function fixture(name: string): Uint8Array {
+  const hex = readFileSync(new URL(`../fixtures/${name}`, import.meta.url), 'utf8').trim();
+  return Uint8Array.from(hex.match(/../g) ?? [], (pair) => Number.parseInt(pair, 16));
+}
+
 describe('Rito React Native binary protocol', () => {
-  it('decodes the Rito 2.0.0 Rust primitive fixture', () => {
-    const hex = readFileSync(new URL('../fixtures/rito-2-primitive-list.hex', import.meta.url), 'utf8').trim();
-    const bytes = Uint8Array.from(hex.match(/../g) ?? [], (pair) => Number.parseInt(pair, 16));
-    const list = decodeRitoReaderPrimitiveList(bytes);
+  it('decodes the Rito 3 Rust primitive fixture', () => {
+    const list = decodeRitoReaderPrimitiveList(fixture('rito-3-primitive-list.hex'));
     expect(list.formatVersion).toBe(2);
     expect(list.ratio).toBe(2);
     expect(list.commands.map((command) => command.kind)).toEqual([
       'push-state', 'pop-state', 'translate', 'opacity', 'transform', 'clip-path',
-      'fill-rect', 'fill-path', 'stroke-path', 'shadow', 'draw-image', 'text', 'ruby',
+      'fill-rect', 'fill-path', 'stroke-path', 'shadow', 'draw-image', 'text', 'ruby', 'image-fallback',
     ]);
+    const fallback = list.commands[13];
+    expect(fallback?.kind === 'image-fallback' && fallback.state).toBe('broken');
+  });
+
+  it('decodes the Rito 3 Rust artifact fixture with classified hits', () => {
+    const artifact = decodeRitoArtifact(fixture('rito-3-artifact.hex'));
+    expect(artifact.protocolVersion).toBe(6);
+    expect(artifact.localPageIndexes).toEqual([9, 10]);
+    expect(artifact.displayList.commandCount).toBe(14);
+    expect(artifact.pages[0]?.hits).toEqual([{
+      pageIndex: 9,
+      bounds: { x: 11.5, y: 12.5, width: 120, height: 24 },
+      kind: 'footnote-pending',
+      text: '次へ',
+      href: 'chapter-02.xhtml',
+      sourcePoint: { nodePath: [1, 2, 3], textOffset: 5n },
+      targetLocator: { href: 'Text/chapter-02.xhtml', anchorId: 'fn7', sourcePoint: undefined, sourceRange: undefined, progression: undefined },
+      destinationLabel: '第二章',
+      imageSrc: 'images/next.png',
+      imageAlt: '次章',
+      footnoteKey: 'Text/chapter-02.xhtml#fn7',
+    }]);
   });
   it('preserves V1 primitive fields in little-endian order', () => {
     const bytes = new RitoBinaryWriter()
@@ -99,7 +124,7 @@ describe('Rito React Native binary protocol', () => {
   it('strictly decodes RITOART1 and nested RITORES1 messages', () => {
     const display = new RitoBinaryWriter().writeAscii('RITODL1').writeU32(2).writeF64(1).writeU32(0).toUint8Array();
     const artifact = message('RITOART1')
-      .writeU32(5).writeU32(1).writeU64(91n).writeU64(12n).writeU64(44n).writeU32(3).writeU64(7001n)
+      .writeU32(6).writeU32(1).writeU64(91n).writeU64(12n).writeU64(44n).writeU32(3).writeU64(7001n)
       .writeRecord((locator) => {
         locator.writeUtf8('chapter.xhtml').writeU8(0).writeU8(0).writeU8(1)
           .writeRecord((range) => {
@@ -130,7 +155,7 @@ describe('Rito React Native binary protocol', () => {
 
   it('strictly decodes publication metadata and nested TOC', () => {
     const publication = message('RITOPUB1')
-      .writeU32(5).writeU64(91n)
+      .writeU32(6).writeU64(91n)
       .writeRecord((record) => record.writeUtf8('Fixture').writeUtf8('en').writeUtf8('urn:fixture').writeU8(0))
       .writeU32(1)
       .writeRecord((record) => record.writeU32(0).writeU8(1).writeU32(0).writeUtf8('chapter').writeUtf8('chapter.xhtml'))
