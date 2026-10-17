@@ -1,10 +1,6 @@
 name: Build Rust prebuilt libraries
 on:
   workflow_call:
-    inputs:
-      profile:
-        type: string
-        default: lunar
 permissions:
   contents: read
 jobs:
@@ -20,8 +16,6 @@ jobs:
             platform: ios
             targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
     runs-on: ${{ matrix.os }}
-    env:
-      RITO_ENGINE_PROFILE: ${{ inputs.profile }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,7 +30,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;27.1.12297006'
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
           cargo +1.95.0 install cargo-ndk --version 4.1.2 --locked
-      - run: node scripts/engine.mjs export --profile "$RITO_ENGINE_PROFILE"
+      - run: node scripts/engine.mjs export
       - run: node scripts/prebuilt.mjs build '${{ matrix.platform }}'
       - name: Check Apple integration syntax
         if: matrix.platform == 'ios'

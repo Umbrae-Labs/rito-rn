@@ -20,7 +20,7 @@ function fixture(t) {
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.writeFileSync(destination, contents);
   };
-  const source = { schema: 1, profile: 'lunar', commit: 'a'.repeat(40), rustVersion: '1.95.0', files: { [header]: hash('header') } };
+  const source = { schema: 3, profile: 'lunar', ref: 'lunar', commit: 'a'.repeat(40), rustVersion: '1.95.0', files: { [header]: hash('header') } };
   const manifest = { schema: 1, platform: 'android', sourceSha256: sourceDigest(source), files: { [library]: hash('archive') } };
   const saveSource = () => put('native/rito/rito-source.json', JSON.stringify(source));
   const saveManifest = () => put('prebuilt/android/manifest.json', JSON.stringify(manifest));

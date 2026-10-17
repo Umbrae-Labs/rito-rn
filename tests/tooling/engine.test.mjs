@@ -8,8 +8,8 @@ import { fileHashes, hash, inside, profileConfig, registryPins } from '../../scr
 test('generation rejects escaping destinations and floating revisions', () => {
   assert.throws(() => inside(os.tmpdir(), '../outside'));
   assert.throws(() => inside(os.tmpdir(), '.'));
-  assert.throws(() => profileConfig({ profiles: { lunar: { ref: 'lunar', commit: 'dev' } } }, 'lunar'));
-  assert.throws(() => profileConfig({ profiles: {} }, 'missing'));
+  assert.throws(() => profileConfig({ schema: 3, profile: 'lunar', ref: 'lunar', commit: 'dev' }));
+  assert.throws(() => profileConfig({ schema: 3, profile: 'missing', ref: 'dev', commit: 'a'.repeat(40) }));
 });
 
 test('registry pin audit retains name, version, source and checksum', () => {

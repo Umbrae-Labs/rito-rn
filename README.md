@@ -32,6 +32,12 @@ or cargo-ndk. Standard Android or Xcode build tools are still required.
 pnpm add @umbrae-labs/rito-rn react-native-nitro-modules@0.37.0
 ```
 
+| npm tag | Engine |
+| --- | --- |
+| `latest` | Rito upstream release (`master`) |
+| `canary` | Rito upstream development (`dev`) |
+| `lunar` | Rito `dev` with Lunar kernel changes and bindings |
+
 Use a native application build after installing or upgrading this package so the
 native library changes are included.
 

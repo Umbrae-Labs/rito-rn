@@ -3,9 +3,13 @@
 The npm package is `@umbrae-labs/rito-rn`. This repository owns the TypeScript
 session API, wire protocol adapter, Nitro C++ bindings and platform build setup.
 
-Edit kernel Rust only in the `upstream/rito` fork: Lunar changes go to its `lunar`
-branch, upstream fixes to topic branches based on `dev`. Record a pushed fork commit
-with `pnpm run engine:update`; regenerate with `pnpm run engine:export`.
+This repository and the Rito fork share three branches: `master` and `dev`
+support the upstream lines, `lunar` adds Lunar kernel changes and their bindings.
+Each branch builds only the fork branch of the same name; merge `dev` into
+`lunar` and `master`, never back. Edit kernel Rust only in the `upstream/rito`
+fork: Lunar changes go to its `lunar` branch, upstream fixes to topic branches
+based on `dev`. Record a pushed fork commit with `pnpm run engine:update`;
+regenerate with `pnpm run engine:export`.
 `native/rito`, `prebuilt` and `.engine` are generated outputs. Preserve
 `engine.lock.json` full commit hashes.
 

@@ -34,11 +34,16 @@ function removeGenerated(relative) {
   fs.rmSync(destination, { recursive: true, force: true });
 }
 
-export function profileConfig(lock, name) {
-  const profile = lock.profiles[name];
-  if (!profile || !/^[a-z][a-z0-9-]*$/.test(name)) throw new Error(`Unknown engine profile: ${name}`);
-  if (!/^[a-f0-9]{40}$/.test(profile.commit)) throw new Error('Engine revisions must be full commit hashes');
-  return profile;
+// Each adapter branch builds exactly one engine line: the fork branch of the same name.
+export const profiles = { lunar: 'lunar', canary: 'dev', 'upstream-release': 'master' };
+
+export function profileConfig(lock) {
+  if (lock.schema !== 3) throw new Error('Unsupported engine.lock.json schema');
+  const { profile: name, ref, commit } = lock;
+  if (profiles[name] === undefined) throw new Error(`Unknown engine profile: ${name}`);
+  if (profiles[name] !== ref) throw new Error(`Profile ${name} must track the fork branch ${profiles[name]}`);
+  if (!/^[a-f0-9]{40}$/.test(commit)) throw new Error('Engine revisions must be full commit hashes');
+  return { name, ref, commit };
 }
 
 function sourceReady(lock, profile) {
@@ -49,9 +54,10 @@ function sourceReady(lock, profile) {
   catch { git('fetch', '--no-tags', 'origin', profile.commit); }
 }
 
-export function materialize(name) {
+export function materialize() {
   const lock = json(lockPath);
-  const profile = profileConfig(lock, name);
+  const profile = profileConfig(lock);
+  const { name } = profile;
   sourceReady(lock, profile);
   const relative = `.engine/workspaces/${name}`;
   removeGenerated(relative);
@@ -84,8 +90,9 @@ export function fileHashes(directory) {
   return files;
 }
 
-export function exportEngine(name) {
-  const { lock, profile, workspace } = materialize(name);
+export function exportEngine() {
+  const { lock, profile, workspace } = materialize();
+  const { name } = profile;
   const stage = inside(root, `.engine/export/${name}`);
   removeGenerated(`.engine/export/${name}`);
   fs.mkdirSync(stage, { recursive: true });
@@ -108,7 +115,7 @@ export function exportEngine(name) {
   for (const pin of registryPins(fs.readFileSync(path.join(stage, 'Cargo.lock'), 'utf8'))) {
     if (!originalPins.has(pin)) throw new Error(`Export would change an upstream dependency pin: ${pin}`);
   }
-  const provenance = { schema: 2, profile: name, repository: lock.repository, ref: profile.ref, commit: profile.commit, rustVersion: lock.rustVersion, files: fileHashes(stage) };
+  const provenance = { schema: 3, profile: name, repository: lock.repository, ref: profile.ref, commit: profile.commit, rustVersion: lock.rustVersion, files: fileHashes(stage) };
   writeJson(path.join(stage, 'rito-source.json'), provenance);
   removeGenerated('native/rito');
   copy(stage, path.join(root, 'native/rito'));
@@ -129,49 +136,41 @@ export function verifyEngine(directory = path.join(root, 'native/rito')) {
   const actual = fileHashes(directory);
   if (JSON.stringify(actual) !== JSON.stringify(provenance.files)) throw new Error('Generated Rust sources changed; edit the fork and regenerate');
   const lock = json(lockPath);
-  const profile = profileConfig(lock, provenance.profile);
-  if (provenance.schema !== 2 || profile.commit !== provenance.commit || profile.ref !== provenance.ref || lock.repository !== provenance.repository || lock.rustVersion !== provenance.rustVersion) throw new Error('Export is stale relative to engine.lock.json');
-  if (directory === path.join(root, 'native/rito') && provenance.profile === lock.defaultProfile) {
+  const profile = profileConfig(lock);
+  if (provenance.schema !== 3 || profile.name !== provenance.profile || profile.commit !== provenance.commit || profile.ref !== provenance.ref || lock.repository !== provenance.repository || lock.rustVersion !== provenance.rustVersion) throw new Error('Export is stale relative to engine.lock.json');
+  if (directory === path.join(root, 'native/rito')) {
     const recorded = recordedCheckout();
-    if (recorded && recorded !== profile.commit) throw new Error('upstream/rito pointer differs from the default profile base; check out the locked commit and stage the submodule');
+    if (recorded && recorded !== profile.commit) throw new Error('upstream/rito pointer differs from engine.lock.json; run engine:update or check out the locked commit and stage the submodule');
   }
   console.log(`Verified ${Object.keys(actual).length} Rust source files (${provenance.profile})`);
   return provenance;
 }
 
 async function main() {
-  const args = process.argv.slice(2);
-  const command = args.shift();
-  const option = (name, fallback) => args.includes(name) ? args[args.indexOf(name) + 1] : fallback;
-  const lock = json(lockPath);
-  const name = option('--profile', lock.defaultProfile);
-  if (command === 'export') exportEngine(name);
+  const command = process.argv[2];
+  if (command === 'export') exportEngine();
   else if (command === 'verify') verifyEngine();
   else if (command === 'update') {
-    const profile = profileConfig(lock, name);
+    const lock = json(lockPath);
+    const profile = profileConfig(lock);
     sourceReady(lock, profile);
-    const ref = option('--ref', profile.ref);
-    if (!/^[a-zA-Z0-9][\w./-]*$/.test(ref)) throw new Error('Invalid Git ref');
-    git('fetch', 'origin', ref);
-    profile.commit = git('rev-parse', 'FETCH_HEAD');
-    profile.ref = ref;
+    git('fetch', 'origin', profile.ref);
+    lock.commit = git('rev-parse', 'FETCH_HEAD');
     const old = fs.readFileSync(lockPath);
     writeJson(lockPath, lock);
-    try { exportEngine(name); } catch (error) { fs.writeFileSync(lockPath, old); throw error; }
-    if (name === lock.defaultProfile) {
-      git('checkout', '--detach', profile.commit);
-      execFileSync('git', ['-C', root, 'add', 'upstream/rito']);
-    }
+    try { exportEngine(); } catch (error) { fs.writeFileSync(lockPath, old); throw error; }
+    git('checkout', '--detach', lock.commit);
+    execFileSync('git', ['-C', root, 'add', 'upstream/rito']);
     console.log('Review engine.lock.json, the submodule pointer, compatibility tests and generated package before committing');
   } else if (command === 'test') {
-    const { workspace } = materialize(name);
+    const { lock, workspace } = materialize();
     const env = { ...process.env, CARGO_TARGET_DIR: path.join(root, '.engine/cargo-target') };
     for (const params of [
       ['test', '--locked', '-p', 'rito-block', '-p', 'rito-core', '-p', 'rito-stylo', '-p', 'rito-style-contract', '--lib'],
       ['test', '--locked', '-p', 'rito-stylo', '--test', 'layout_style'],
       ['check', '--locked', '-p', 'rito-ffi', '--lib'],
     ]) execFileSync('cargo', [`+${lock.rustVersion}`, ...params], { cwd: workspace, env, stdio: 'inherit' });
-  } else throw new Error('Usage: engine.mjs export|verify|update|test [--profile lunar|canary|upstream-release] [--ref branch]');
+  } else throw new Error('Usage: engine.mjs export|verify|update|test');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch((error) => { console.error(error.message); process.exitCode = 1; });

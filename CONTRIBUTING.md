@@ -4,54 +4,67 @@ The adapter and kernel have separate editing locations. Edit TypeScript, Nitro,
 C++ and platform integration in this repository. Edit Rust in `upstream/rito`,
 a submodule of the Rito fork. `native/rito`, `prebuilt` and `.engine` are generated.
 
-## Fork branches
+## Branches
 
-| Branch | Role | Profile |
-| --- | --- | --- |
-| `lunar` | Engine used by Lunar: upstream `dev` plus Lunar commits | `lunar` |
-| `dev` | Mirror of Ringyuki/Rito `dev` | `canary` |
-| `master` | Mirror of Ringyuki/Rito `master` | `upstream-release` |
-| `fix/*`, `feat/*` | One upstream PR each, based on `dev` | none |
+The adapter and the fork have the same three lines. Each adapter branch builds
+only the fork branch of the same name, so bindings one line adds never reach
+the packages of another.
 
-`dev` and `master` carry no fork commits; update them only by fast-forwarding to
-Ringyuki/Rito. `lunar` advances by merging `dev` and by Lunar commits. Never
-rebase or force-push `lunar`: released packages pin its commits by SHA.
+| Adapter and fork branch | Engine | Adapter content | npm tag | Version |
+| --- | --- | --- | --- | --- |
+| `master` | Mirror of Ringyuki/Rito `master` | Upstream release support | `latest` | `0.3.0` |
+| `dev` | Mirror of Ringyuki/Rito `dev` | Upstream development support | `canary` | `0.4.0-canary.1` |
+| `lunar` | Upstream `dev` plus Lunar kernel commits | `dev` plus Lunar bindings | `lunar` | `0.3.0-lunar.1` |
+
+Fork `dev` and `master` carry no fork commits; update them only by
+fast-forwarding to Ringyuki/Rito. Fork fix branches start from `dev`, one
+upstream PR each.
+
+Changes flow in one direction in both repositories: `dev` into `lunar`, and
+`dev` into `master` when upstream releases. Adapter support for upstream
+protocol changes is made on `dev`; bindings for Lunar-only kernel changes are
+made on `lunar` and never merged back. Never rebase or force-push any of the
+three branches: released packages pin adapter and fork commits by SHA.
 
 ## Initial checkout
 
 ```sh
-git clone --recurse-submodules <adapter-repository>
+git clone --recurse-submodules --branch <dev|lunar|master> <adapter-repository>
 cd <adapter-repository>
 pnpm install --frozen-lockfile
 pnpm run engine:export
 pnpm run check
 ```
 
-`engine.lock.json` records each profile's fork branch and the exact commit built
-from it. Branch names are used only by the explicit update command. Neither
-installation nor ordinary export fetches a moving branch. A shallow development
-checkout may fetch a missing pinned commit by its full SHA.
+`engine.lock.json` names the branch's engine profile, the fork branch it tracks
+and the exact commit built from it. The branch name is used only by the explicit
+update command. Neither installation nor ordinary export fetches a moving
+branch. A shallow development checkout may fetch a missing pinned commit by its
+full SHA.
 
-The recorded submodule pointer always equals `lunar.commit`; `engine:verify`
+The recorded submodule pointer always equals the locked commit; `engine:verify`
 rejects any other committed or staged pointer. Working branches only move the
 checked-out commit. Do not stage `upstream/rito` by hand; record a new commit
 through `engine:update`.
 
 ## Changing the kernel
 
-Lunar-only changes are committed to `lunar`. A fix meant for upstream starts
-from `dev` on its own branch, opens a PR against Ringyuki/Rito `dev`, and is
-merged into `lunar` when Lunar needs it before upstream releases it. Once
-upstream merges the PR, the next `dev` merge into `lunar` brings it back.
+Lunar-only kernel changes are committed to fork `lunar`. A fix meant for
+upstream starts from fork `dev` on its own branch, opens a PR against
+Ringyuki/Rito `dev`, and is merged into fork `lunar` when Lunar needs it before
+upstream releases it. Once upstream merges the PR, the next `dev` merge brings
+it back to `lunar`.
 
 ```sh
+git switch lunar
 git -C upstream/rito switch -c fix/my-change origin/dev
 # Edit, test and commit; push the branch and open the upstream PR.
 git -C upstream/rito switch lunar
 git -C upstream/rito merge fix/my-change
 git -C upstream/rito push origin lunar
 git -C upstream/rito checkout --detach
-pnpm run engine:update -- --profile lunar
+pnpm run engine:update
+# Adapt src/protocol and the Nitro bridge if the change adds bindings.
 pnpm run engine:test
 pnpm run check
 ```
@@ -60,36 +73,54 @@ Every engine build input must be a pushed fork commit; CI fetches it by SHA.
 
 ## Updating from upstream
 
+Sync the fork mirrors, then update the adapter's `dev` first:
+
 ```sh
 gh repo sync Saramanda9988/Rito --branch dev
 gh repo sync Saramanda9988/Rito --branch master
-git -C upstream/rito fetch origin
+git switch dev
+pnpm run engine:update
+# Adapt src/protocol to the engine changes and refresh src/protocol/rito2.
+pnpm run engine:test
+pnpm run check
+git add engine.lock.json upstream/rito
+git commit
+```
+
+Then bring the same change to `lunar`. Merge fork `dev` into fork `lunar`
+first, then merge adapter `dev` into adapter `lunar` without committing. The
+lock file and submodule pointer conflict by design: keep `lunar`'s lock file,
+and let `engine:update` record the new fork commit and resolve the pointer:
+
+```sh
 git -C upstream/rito switch lunar
 git -C upstream/rito merge origin/dev
 git -C upstream/rito push origin lunar
 git -C upstream/rito checkout --detach
-pnpm run engine:update -- --profile lunar
+git switch lunar
+git merge --no-commit dev
+git checkout --ours engine.lock.json
+git add engine.lock.json
+pnpm run engine:update
 pnpm run engine:test
 pnpm run check
-git add engine.lock.json upstream/rito
+git commit
 ```
 
-`canary` and `upstream-release` follow `dev` and `master` the same way through
-`engine:update -- --profile <name>`; their export replaces `native/rito`, so
-export `lunar` again before committing. An update resolves the branch head to a
-full commit and exports a candidate; a failed export restores the old lock file.
-Updating the default profile also detaches the submodule at the new commit and
-stages its pointer. Existing releases remain identified by their package version
-and provenance manifest.
+When upstream releases, bring `dev` into `master` the same way: merge adapter
+`dev` into adapter `master` without committing, keep `master`'s lock file and
+run `engine:update`, which records the synced fork `master`.
 
-A changed engine can change the wire protocol. Review the commits between the
-old and new base for `RITO*` message, `READER_PROTOCOL_VERSION` and `RITODL1`
-changes, update `src/protocol` with them, and refresh `src/protocol/rito2` and
-its fixtures from the same upstream commit.
+An update resolves the branch head to a full commit and exports a candidate; a
+failed export restores the old lock file. The update also detaches the submodule
+at the new commit and stages its pointer. A changed engine can change the wire
+protocol. Review the commits between the old and new engine for `RITO*` message,
+`READER_PROTOCOL_VERSION` and `RITODL1` changes, update `src/protocol` with
+them, and refresh `src/protocol/rito2` and its fixtures from the same upstream
+commit.
 
-The scheduled adapter action proposes lock updates for every profile from the
-fork branches. It does not update the fork itself; sync `dev` and `master`
-first.
+The scheduled adapter action checks out each branch and proposes a lock update
+against it. It does not update the fork itself; sync `dev` and `master` first.
 
 ## Tests and package checks
 
@@ -128,7 +159,7 @@ pnpm run package:smoke
 ```
 
 `native-prebuilds.yml` is a reusable action called by CI and release. It exports
-the selected profile on each build host, builds and link-checks the libraries,
+the branch's engine on each build host, builds and link-checks the libraries,
 and uploads `prebuilt-android` and `prebuilt-ios`. The packaging job downloads both,
 checks their source identity, then packs and verifies the resulting npm archive.
 The C++ Nitro bridge remains source-built against the consuming application's
@@ -144,15 +175,15 @@ local source-only development archive, remove generated prebuilts and set
 Consumers of that archive must enable `RITO_BUILD_FROM_SOURCE=1`. Public release
 automation always requires binaries; keep source-only archives for development.
 
-The manual release action accepts a profile and unique version. By default it
-uploads a tarball only. Enabling `publish` publishes through the `npm` GitHub
-environment using npm trusted publishing with GitHub OIDC and the following dist-tag:
-
-| Profile | npm tag | Version example |
-| --- | --- | --- |
-| lunar | latest | 0.2.0 |
-| canary | canary | 0.3.0-canary.1 |
-| upstream-release | upstream-release | 0.3.0-upstream.1 |
+The manual release action runs on the selected branch and accepts a unique
+version of that branch's form (see [Branches](#branches)); `scripts/release-channel.mjs`
+rejects any other branch, profile or version form before native builds start.
+Only `master` publishes plain versions, so a semver range never resolves to a
+`lunar` or `canary` build whose bindings the upstream engine lacks. By default
+the action uploads a tarball only. Enabling `publish` publishes through the
+`npm` GitHub environment using npm trusted publishing with GitHub OIDC and the
+branch's dist-tag. If the `npm` environment restricts deployment branches, allow
+`master`, `dev` and `lunar`.
 
 After npm publication succeeds, a separate job creates a GitHub Release named
 `v<version>` and attaches the same verified npm archive. Its tag targets the
@@ -167,7 +198,7 @@ rerun the failed job rather than starting another npm publication of that versio
 If GitHub created a partial release before the failure, inspect that release and
 its assets before retrying creation.
 
-Preview profiles require a prerelease version. The release job runs on a
+The release job runs on a
 GitHub-hosted runner with Node 24, checks npm >=11.5.1, and grants `id-token: write`.
 It uses no `NPM_TOKEN` secret. Package-manager caching is disabled for this job.
 
@@ -203,7 +234,7 @@ case-sensitive; the workflow field is the filename without `.github/workflows/`.
 Keep `package.json` repository.url set to
 `git+https://github.com/Umbrae-Labs/rito-rn.git`.
 
-Once configured, run the release action with a new version, profile `lunar`, and
+Once configured, run the release action on a branch with a new version and
 `publish` enabled. npm exchanges the GitHub OIDC identity for short-lived publish
 credentials. Public GitHub repositories publishing public packages also receive
 automatic provenance. After a successful OIDC release, remove any obsolete npm
@@ -217,5 +248,5 @@ are not reproducible build inputs. Lunar pins an exact npm registry version in
 `apps/mobile/package.json`, so its repository builds without this development checkout.
 
 The release action sets the package version from its input without committing it.
-After a publication, set `package.json` here to the published version so the
-repository names the latest release.
+After a publication, set `package.json` on the released branch to the published
+version so each branch names its latest release.

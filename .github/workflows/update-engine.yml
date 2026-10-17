@@ -11,11 +11,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profile: [lunar, canary, upstream-release]
+        branch: [lunar, dev, master]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ matrix.branch }}
           submodules: recursive
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -24,18 +25,20 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: rustup toolchain install 1.95.0 --profile minimal
-      - run: node scripts/engine.mjs update --profile '${{ matrix.profile }}'
+      - run: node scripts/engine.mjs update
       - run: pnpm run check
-      - run: node scripts/engine.mjs test --profile '${{ matrix.profile }}'
+      - run: node scripts/engine.mjs test
       - uses: peter-evans/create-pull-request@v7
         with:
-          branch: engine-update/${{ matrix.profile }}
-          title: Update pinned Rito engine for ${{ matrix.profile }}
+          base: ${{ matrix.branch }}
+          branch: engine-update/${{ matrix.branch }}
+          title: Update pinned Rito engine for ${{ matrix.branch }}
           commit-message: 'chore: update pinned Rito engine'
           add-paths: |
             engine.lock.json
             upstream/rito
           body: |
-            Updates the exact engine commit to the head of the profile's fork branch.
+            Updates the exact engine commit to the head of the fork's ${{ matrix.branch }} branch.
+            Check the commits in between for wire protocol and RITODL1 changes; the adapter tests do not run the engine.
             Adapter tests, package validation and Rust tests passed before this PR was created.
             Review native device behavior before adopting the new package in Lunar.

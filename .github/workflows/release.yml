@@ -2,13 +2,8 @@ name: Build or publish npm package
 on:
   workflow_dispatch:
     inputs:
-      profile:
-        type: choice
-        options: [lunar, canary, upstream-release]
-        default: lunar
-        required: true
       version:
-        description: Unique npm version; preview profiles require a prerelease suffix
+        description: Unique npm version of the selected branch's line (master X.Y.Z, dev X.Y.Z-canary.N, lunar X.Y.Z-lunar.N)
         type: string
         required: true
       publish:
@@ -23,8 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      profile: ${{ steps.channel.outputs.profile }}
+      tag: ${{ steps.channel.outputs.tag }}
     env:
-      RITO_ENGINE_PROFILE: ${{ inputs.profile }}
       RELEASE_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
@@ -32,22 +29,22 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Validate release version before native builds
+      - name: Validate branch, channel and version before native builds
+        id: channel
         run: |
-          node -e 'const v=process.env.RELEASE_VERSION,p=process.env.RITO_ENGINE_PROFILE;if(!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(v)||(p!=="lunar"&&!v.includes("-")))throw Error("Invalid release version")'
+          node scripts/release-channel.mjs "$RELEASE_VERSION" "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           npm version "$RELEASE_VERSION" --no-git-tag-version --ignore-scripts --allow-same-version
           node -e 'if(require("./package.json").version!==process.env.RELEASE_VERSION)throw Error("Use the canonical npm version without leading zeroes")'
   native:
     needs: validate
     uses: ./.github/workflows/native-prebuilds.yml
-    with:
-      profile: ${{ inputs.profile }}
   release:
-    needs: native
+    needs: [validate, native]
     runs-on: ubuntu-latest
     environment: npm
     env:
-      RITO_ENGINE_PROFILE: ${{ inputs.profile }}
+      RITO_ENGINE_PROFILE: ${{ needs.validate.outputs.profile }}
+      RELEASE_TAG: ${{ needs.validate.outputs.tag }}
       RELEASE_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
@@ -67,7 +64,7 @@ jobs:
       - run: rustup toolchain install 1.95.0 --profile minimal
       - run: |
           npm version "$RELEASE_VERSION" --no-git-tag-version --ignore-scripts --allow-same-version
-          node scripts/engine.mjs export --profile "$RITO_ENGINE_PROFILE"
+          node scripts/engine.mjs export
       - uses: actions/download-artifact@v4
         with:
           pattern: prebuilt-*
@@ -75,17 +72,13 @@ jobs:
           path: prebuilt
       - run: pnpm run native:verify
       - run: pnpm run check
-      - run: node scripts/engine.mjs test --profile "$RITO_ENGINE_PROFILE"
+      - run: node scripts/engine.mjs test
       - run: pnpm pack --pack-destination artifacts
       - run: pnpm run package:smoke
       - name: Validate npm publication without uploading
         id: publication
         run: |
-          case "$RITO_ENGINE_PROFILE" in
-            lunar) tag=latest ;;
-            canary) tag=canary ;;
-            upstream-release) tag=upstream-release ;;
-          esac
+          tag="$RELEASE_TAG"
           archive="./artifacts/umbrae-labs-rito-rn-${RELEASE_VERSION}.tgz"
           test -f "$archive"
           npm publish "$archive" --dry-run --access public --tag "$tag"
@@ -93,7 +86,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: npm-${{ inputs.profile }}-${{ inputs.version }}
+          name: npm-${{ inputs.version }}
           path: artifacts/*.tgz
       - if: inputs.publish
         name: Publish using npm trusted publishing
@@ -103,7 +96,7 @@ jobs:
         run: |
           npm publish "$RELEASE_ARCHIVE" --access public --tag "$RELEASE_TAG"
   github-release:
-    needs: release
+    needs: [validate, release]
     if: inputs.publish
     runs-on: ubuntu-latest
     permissions:
@@ -111,12 +104,12 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RITO_ENGINE_PROFILE: ${{ inputs.profile }}
+      RITO_ENGINE_PROFILE: ${{ needs.validate.outputs.profile }}
       RELEASE_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: npm-${{ inputs.profile }}-${{ inputs.version }}
+          name: npm-${{ inputs.version }}
           path: artifacts
       - name: Create GitHub Release after npm publication
         run: |
