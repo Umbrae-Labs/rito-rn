@@ -3,7 +3,7 @@
   "repository": "https://github.com/Saramanda9988/Rito.git",
   "upstreamRepository": "https://github.com/Ringyuki/Rito.git",
   "rustVersion": "1.95.0",
-  "profile": "canary",
-  "ref": "dev",
+  "profile": "upstream-release",
+  "ref": "master",
   "commit": "9c9111ca2fc57f63ce81c65d3c4f80cb513610ae"
 }
