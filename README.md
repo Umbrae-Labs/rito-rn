@@ -21,19 +21,10 @@ or cargo-ndk. Standard Android or Xcode build tools are still required.
 | iOS device | Static library in `RitoFFI.xcframework` | ARM64 |
 | iOS simulator | Static library in `RitoFFI.xcframework` | ARM64 and x86_64 |
 
-Each library is checked against its engine source manifest and file checksums.
-Missing or mismatched artifacts stop the build; source compilation is an explicit
-development option.
-
 > [!NOTE]
 > Version 0.2.0 was published as a source-only package. Precompiled libraries become
 > available in releases built with this publishing configuration. Upgrade the npm
 > dependency to such a release to use them.
-
-Android static-library and Nitro bridge builds have been validated locally.
-Apple library builds and FFI link checks are configured in macOS CI; a complete
-iOS application build and device testing remain to be validated. Platform support
-currently covers Android and iOS.
 
 ## Installation
 
