@@ -89,8 +89,10 @@ git commit
 
 Then bring the same change to `lunar`. Merge fork `dev` into fork `lunar`
 first, then merge adapter `dev` into adapter `lunar` without committing. The
-lock file and submodule pointer conflict by design: keep `lunar`'s lock file,
-and let `engine:update` record the new fork commit and resolve the pointer:
+lock file conflicts by design; keep `lunar`'s. The submodule pointer may
+conflict or silently take `dev`'s commit; `engine:update` records the new fork
+`lunar` commit either way, and `engine:verify` rejects a pointer that differs
+from the lock:
 
 ```sh
 git -C upstream/rito switch lunar
