@@ -1,7 +1,7 @@
 {
   "name": "@umbrae-labs/rito-rn",
   "version": "0.2.2",
-  "description": "React Native adaptation for Rito, built from the Lunar branch of the Rito fork.",
+  "description": "React Native adapter for the Rito EPUB reading engine.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Umbrae-Labs/rito-rn.git"
@@ -20,7 +20,6 @@
     "engine:export": "node scripts/engine.mjs export",
     "engine:verify": "node scripts/engine.mjs verify",
     "engine:update": "node scripts/engine.mjs update",
-    "engine:capture": "node scripts/engine.mjs capture",
     "engine:test": "node scripts/engine.mjs test",
     "package:verify": "node scripts/verify-package.mjs",
     "prepack": "node scripts/prepare-package.mjs",
