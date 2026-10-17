@@ -1,6 +1,6 @@
 {
   "name": "@umbrae-labs/rito-rn",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "React Native adapter for the Rito EPUB reading engine.",
   "repository": {
     "type": "git",
