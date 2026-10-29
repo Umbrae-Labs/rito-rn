@@ -23,6 +23,7 @@ class HybridRitoNitro final : public HybridRitoNitroSpec {
   std::shared_ptr<Promise<RitoNitroResult>> search(const std::string& sessionId, const std::shared_ptr<ArrayBuffer>& request) override;
   std::shared_ptr<Promise<RitoNitroResult>> textRangeGeometry(const std::string& sessionId, const std::shared_ptr<ArrayBuffer>& request) override;
   std::shared_ptr<Promise<RitoNitroResult>> resolveExactSourceRange(const std::string& sessionId, const std::shared_ptr<ArrayBuffer>& request) override;
+  std::shared_ptr<Promise<RitoNitroResult>> readPage(const std::string& sessionId, const std::string& artifactId, double pageIndex) override;
   std::shared_ptr<Promise<RitoNitroResult>> readFootnote(const std::string& sessionId, const std::string& artifactId, const std::string& key) override;
   std::shared_ptr<Promise<RitoNitroResult>> releaseArtifact(const std::string& sessionId, const std::string& artifactId) override;
   std::shared_ptr<Promise<RitoNitroResult>> disposeSession(const std::string& sessionId) override;

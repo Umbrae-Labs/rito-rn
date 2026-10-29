@@ -190,6 +190,15 @@ std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::readResource(const st
   });
 }
 
+std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::readPage(const std::string& sessionId, const std::string& artifactId, double pageIndex) {
+  return submitChecked(executor_, [session = parseExternalId(sessionId, "sessionId"), artifact = parseExternalId(artifactId, "artifactId"), pageIndex] {
+    if (!std::isfinite(pageIndex) || pageIndex < 0 || pageIndex > 0xffff'ffffU || std::floor(pageIndex) != pageIndex) throw std::invalid_argument("page index must be a u32.");
+    rito_owned_buffer output{}; rito_owned_buffer error{};
+    const auto status = rito_read_page(session, artifact, static_cast<std::uint32_t>(pageIndex), &output, &error);
+    return ritojs::reactnative::collectRitoResult(status, &output, &error);
+  });
+}
+
 std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::readFootnote(const std::string& sessionId, const std::string& artifactId, const std::string& key) {
   return submitChecked(executor_, [session = parseExternalId(sessionId, "sessionId"), artifact = parseExternalId(artifactId, "artifactId"), key] {
     if (key.empty()) throw std::invalid_argument("footnote key must not be empty.");

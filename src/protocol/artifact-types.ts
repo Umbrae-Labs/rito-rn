@@ -37,13 +37,16 @@ export interface RitoSemanticNode {
   readonly href?: string; readonly bounds: RitoRect; readonly children: readonly RitoSemanticNode[];
 }
 export interface RitoTextRunOffset { readonly start: bigint; readonly end: bigint; readonly blockIndex: number; readonly lineIndex: number; readonly runIndex: number }
-export interface RitoPage {
-  readonly pageIndex: number; readonly width: number; readonly height: number; readonly hits: readonly RitoHitEntry[];
+/** A page an artifact shows; what it holds is read with RitoReaderSession.readPage. */
+export interface RitoPage { readonly pageIndex: number; readonly width: number; readonly height: number }
+/** What one page of a live artifact holds: interaction targets, semantic outline, text and text runs (RITOPGR1). */
+export interface RitoPageRecords {
+  readonly artifactId: bigint; readonly pageIndex: number; readonly hits: readonly RitoHitEntry[];
   readonly semantics: readonly RitoSemanticNode[]; readonly text: string; readonly textLength: bigint;
   readonly textRuns: readonly RitoTextRunOffset[];
 }
 export interface RitoDisplayListPayload {
-  readonly formatVersion: 2; readonly commandCount: number; readonly semanticDigest: Uint8Array;
+  readonly formatVersion: 4; readonly commandCount: number;
   readonly wireBytes: Uint8Array; readonly displayList: RitoReaderPrimitiveList;
 }
 export interface RitoArtifact {
