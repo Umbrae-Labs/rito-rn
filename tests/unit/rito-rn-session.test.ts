@@ -82,6 +82,21 @@ describe('RitoReaderSession neighbor navigation', () => {
   });
 });
 
+describe('RitoReaderSession page records', () => {
+  it('reads a page of a live artifact and rejects records for another page', async () => {
+    let pageIndex = 3;
+    const native = fakeNative((operation) => {
+      if (operation === 'readPage') return result(pageRecordsWire(2n, pageIndex, '章'));
+      return result(new Uint8Array());
+    });
+    const session = new RitoReaderSession(1n, { native });
+    await expect(session.readPage(2n, 3)).resolves.toMatchObject({ artifactId: 2n, pageIndex: 3, text: '章', hits: [], semantics: [] });
+    pageIndex = 4;
+    await expect(session.readPage(2n, 3)).rejects.toMatchObject({ status: 4 });
+    await expect(session.readPage(2n, -1)).rejects.toThrow(RangeError);
+  });
+});
+
 function fakeNative(handler: (operation: string) => RitoNativeCallResult): RitoNativeReaderModule {
   const call = (operation: string) => Promise.resolve(handler(operation));
   return {
@@ -97,6 +112,7 @@ function fakeNative(handler: (operation: string) => RitoNativeCallResult): RitoN
     readResource: () => call('readResource'),
     search: () => call('search'),
     textRangeGeometry: () => call('textRangeGeometry'),
+    readPage: () => call('readPage'),
     readFootnote: () => call('readFootnote'),
     releaseArtifact: () => call('releaseArtifact'),
     dispose: () => call('dispose'),
@@ -108,17 +124,25 @@ function result(data: Uint8Array): RitoNativeCallResult {
 }
 
 function artifactWire(sessionId: bigint, requestId: bigint, artifactId: bigint): Uint8Array {
-  const display = new RitoBinaryWriter().writeAscii('RITODL1').writeU32(2).writeF64(1).writeU32(0).toUint8Array();
+  // An empty format 4 list: no primitives, then empty cluster, text and paint tables.
+  const display = new RitoBinaryWriter().writeAscii('RITODL1').writeU32(4).writeF64(1).writeU32(0)
+    .writeU32(0).writeU8(0).writeUtf8('').writeU32(0).toUint8Array();
   const writer = new RitoBinaryWriter()
     .writeAscii('RITOART1').writeU32(1).writeU64(0n)
-    .writeU32(6).writeU32(1).writeU64(sessionId).writeU64(requestId).writeU64(1n).writeU32(1).writeU64(artifactId)
+    .writeU32(7).writeU32(1).writeU64(sessionId).writeU64(requestId).writeU64(1n).writeU32(1).writeU64(artifactId)
     .writeRecord((locator) => locator.writeUtf8('chapter.xhtml').writeU8(0).writeU8(0).writeU8(0).writeU8(0))
     .writeU32(4).writeU32(0).writeU32(0).writeU32(1).writeU32(1)
     .writeF64(390).writeF64(844).writeU8(0).writeU8(0)
     .writeU32(0).writeU32(0).writeU32(0)
-    .writeRecord((displayRecord) => displayRecord.writeU32(2).writeU32(0).writeU32(32).writeBytes(new Uint8Array(32)).writeU64(BigInt(display.byteLength)).writeBytes(display))
+    .writeRecord((displayRecord) => displayRecord.writeU32(4).writeU32(0).writeU64(BigInt(display.byteLength)).writeBytes(display))
     .writeU32(0).writeU32(0).writeU32(0);
   return finish(writer);
+}
+
+function pageRecordsWire(artifactId: bigint, pageIndex: number, text: string): Uint8Array {
+  return finish(new RitoBinaryWriter().writeAscii('RITOPGR1').writeU32(1).writeU64(0n)
+    .writeU64(artifactId).writeU32(pageIndex).writeU32(0).writeU32(0)
+    .writeUtf8(text).writeU64(BigInt(text.length)).writeU32(0));
 }
 
 function foregroundAck(intentRequestId: bigint, replacedArtifactId: bigint | undefined, visibleArtifactId: bigint): Uint8Array {

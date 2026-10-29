@@ -31,6 +31,7 @@ export interface RitoNitro extends HybridObject<{ android: 'c++', ios: 'c++' }> 
   search(sessionId: string, request: ArrayBuffer): Promise<RitoNitroResult>
   textRangeGeometry(sessionId: string, request: ArrayBuffer): Promise<RitoNitroResult>
   resolveExactSourceRange(sessionId: string, request: ArrayBuffer): Promise<RitoNitroResult>
+  readPage(sessionId: string, artifactId: string, pageIndex: number): Promise<RitoNitroResult>
   readFootnote(sessionId: string, artifactId: string, key: string): Promise<RitoNitroResult>
   releaseArtifact(sessionId: string, artifactId: string): Promise<RitoNitroResult>
   disposeSession(sessionId: string): Promise<RitoNitroResult>

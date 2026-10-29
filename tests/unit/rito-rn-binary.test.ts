@@ -17,7 +17,7 @@ import {
 } from '../../src/protocol/requests';
 import { decodeRitoBackgroundHandoffAck, decodeRitoForegroundHandoffAck } from '../../src/protocol/handoff';
 import { decodeRitoFootnote, decodeRitoSearchResponse, decodeRitoTextRangeGeometry, encodeRitoSearchRequest, encodeRitoTextRangeRequest } from '../../src/protocol/interaction';
-import { decodeRitoArtifact, decodeRitoResource } from '../../src/protocol/artifact';
+import { decodeRitoArtifact, decodeRitoPageRecords, decodeRitoResource } from '../../src/protocol/artifact';
 import { decodeRitoPublication } from '../../src/protocol/publication';
 
 function fixture(name: string): Uint8Array {
@@ -28,7 +28,7 @@ function fixture(name: string): Uint8Array {
 describe('Rito React Native binary protocol', () => {
   it('decodes the Rito 3 Rust primitive fixture', () => {
     const list = decodeRitoReaderPrimitiveList(fixture('rito-3-primitive-list.hex'));
-    expect(list.formatVersion).toBe(2);
+    expect(list.formatVersion).toBe(4);
     expect(list.ratio).toBe(2);
     expect(list.commands.map((command) => command.kind)).toEqual([
       'push-state', 'pop-state', 'translate', 'opacity', 'transform', 'clip-path',
@@ -38,12 +38,24 @@ describe('Rito React Native binary protocol', () => {
     expect(fallback?.kind === 'image-fallback' && fallback.state).toBe('broken');
   });
 
-  it('decodes the Rito 3 Rust artifact fixture with classified hits', () => {
+  it('decodes the Rito Rust artifact fixture, its pages by index and size', () => {
     const artifact = decodeRitoArtifact(fixture('rito-3-artifact.hex'));
-    expect(artifact.protocolVersion).toBe(6);
+    expect(artifact.protocolVersion).toBe(7);
     expect(artifact.localPageIndexes).toEqual([9, 10]);
+    expect(artifact.bookPageIndex).toBe(140);
+    expect(artifact.bookPageCount).toBe(312);
     expect(artifact.displayList.commandCount).toBe(14);
-    expect(artifact.pages[0]?.hits).toEqual([{
+    expect(artifact.pages).toEqual([{ pageIndex: 9, width: 400.25, height: 1194.25 }]);
+  });
+
+  it('decodes the Rito Rust page records fixture with classified hits', () => {
+    const records = decodeRitoPageRecords(fixture('rito-3-page-records.hex'));
+    expect(records.artifactId).toBe((1n << 52n) + 11n);
+    expect(records.pageIndex).toBe(9);
+    expect(records.text).toBe('吾輩は猫である。');
+    expect(records.textLength).toBe(9n);
+    expect(records.textRuns).toEqual([{ start: 0n, end: 9n, blockIndex: 4294967295, lineIndex: 2, runIndex: 3 }]);
+    expect(records.hits).toEqual([{
       pageIndex: 9,
       bounds: { x: 11.5, y: 12.5, width: 120, height: 24 },
       kind: 'footnote-pending',
@@ -122,9 +134,9 @@ describe('Rito React Native binary protocol', () => {
   });
 
   it('strictly decodes RITOART1 and nested RITORES1 messages', () => {
-    const display = new RitoBinaryWriter().writeAscii('RITODL1').writeU32(2).writeF64(1).writeU32(0).toUint8Array();
+    const display = fixture('rito-3-primitive-list.hex');
     const artifact = message('RITOART1')
-      .writeU32(6).writeU32(1).writeU64(91n).writeU64(12n).writeU64(44n).writeU32(3).writeU64(7001n)
+      .writeU32(7).writeU32(1).writeU64(91n).writeU64(12n).writeU64(44n).writeU32(3).writeU64(7001n)
       .writeRecord((locator) => {
         locator.writeUtf8('chapter.xhtml').writeU8(0).writeU8(0).writeU8(1)
           .writeRecord((range) => {
@@ -135,7 +147,7 @@ describe('Rito React Native binary protocol', () => {
       })
       .writeU32(0).writeU32(7).writeU32(7).writeU32(1).writeU32(7)
       .writeF64(360).writeF64(640).writeU8(0).writeU8(0)
-      .writeU32(0).writeU32(1).writeU32(1).writeRecord((record) => record.writeU32(2).writeU32(0).writeU32(32).writeBytes(new Uint8Array(32)).writeU64(BigInt(display.byteLength)).writeBytes(display))
+      .writeU32(0).writeU32(1).writeU32(1).writeRecord((record) => record.writeU32(4).writeU32(14).writeU64(BigInt(display.byteLength)).writeBytes(display))
       .writeU32(1).writeRecord((record) => record.writeU32(0).writeUtf8('images/cover.png'))
       .writeU32(1).writeRecord((record) => record.writeUtf8('Rito Serif').writeUtf8('fonts/serif.woff2').writeUtf8('normal').writeU16(400).writeUtf8('shape-v1').writeU64(8192n))
       .writeU32(0);
@@ -146,7 +158,7 @@ describe('Rito React Native binary protocol', () => {
       start: { nodePath: [1, 2], textOffset: 3n },
       end: { nodePath: [1, 2], textOffset: 4n },
     });
-    expect(decoded.displayList.commandCount).toBe(0);
+    expect(decoded.displayList.commandCount).toBe(14);
     expect(decoded.fonts[0]?.family).toBe('Rito Serif');
 
     const resource = message('RITORES1').writeU64(7001n).writeU32(0).writeUtf8('images/cover.png').writeUtf8('image/png').writeU64(3n).writeBytes(Uint8Array.from([1, 2, 3])).writeU8(1).writeU32(320).writeU8(1).writeU32(480);
@@ -155,7 +167,7 @@ describe('Rito React Native binary protocol', () => {
 
   it('strictly decodes publication metadata and nested TOC', () => {
     const publication = message('RITOPUB1')
-      .writeU32(6).writeU64(91n)
+      .writeU32(7).writeU64(91n)
       .writeRecord((record) => record.writeUtf8('Fixture').writeUtf8('en').writeUtf8('urn:fixture').writeU8(0))
       .writeU32(1)
       .writeRecord((record) => record.writeU32(0).writeU8(1).writeU32(0).writeUtf8('chapter').writeUtf8('chapter.xhtml'))
@@ -176,7 +188,7 @@ describe('Rito React Native binary protocol', () => {
     expect(decodeRitoBackgroundHandoffAck(finish(backgroundAck))).toEqual({ intentRequestId: 4n, replacedArtifactId: 2n, visibleArtifactId: 3n });
   });
 
-  it('preserves the Rito 2.0.0 background wire contract without a host work budget', () => {
+  it('encodes the background request with its page budget', () => {
     const bytes = encodeRitoBackgroundRequest({ sessionId: 1n, expectedVisibleArtifactId: 2n });
     expect(bytes.byteLength).toBe(40);
     const reader = new RitoBinaryReader(bytes);
@@ -185,9 +197,13 @@ describe('Rito React Native binary protocol', () => {
     expect(reader.readU64()).toBe(40n);
     expect(reader.readU64()).toBe(1n);
     expect(reader.readU64()).toBe(2n);
-    // The native decoder still reads this field and rejects zero.
-    expect(reader.readU32()).toBe(1);
+    expect(reader.readU32()).toBe(4);
     reader.expectExhausted();
+    const budgeted = new RitoBinaryReader(encodeRitoBackgroundRequest({ sessionId: 1n, expectedVisibleArtifactId: 2n, maxPagesPerQuantum: 64 }));
+    budgeted.expectHeader('RITOBGQ1');
+    budgeted.readU32(); budgeted.readU64(); budgeted.readU64(); budgeted.readU64();
+    expect(budgeted.readU32()).toBe(64);
+    expect(() => encodeRitoBackgroundRequest({ sessionId: 1n, expectedVisibleArtifactId: 2n, maxPagesPerQuantum: 0 })).toThrow(BinaryRitoWireError);
   });
 
   it('encodes and decodes search, text geometry, and footnote contracts', () => {

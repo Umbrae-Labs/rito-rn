@@ -14,7 +14,8 @@ export {
 } from './protocol/binary';
 export { decodeRitoReaderPrimitiveList } from './protocol/rito2/reader-session-primitive-decoder-runtime.js';
 export type { RitoReaderPrimitiveList, RitoReaderPrimitive } from './protocol/rito2/reader-session-primitive';
-export { decodeRitoArtifact, decodeRitoResource } from './protocol/artifact';
+export type { RitoReaderClusters, RitoReaderTextRun } from './protocol/rito2/reader-session-display';
+export { decodeRitoArtifact, decodeRitoPageRecords, decodeRitoResource, RITO_READER_PROTOCOL_VERSION } from './protocol/artifact';
 export { decodeRitoPublication } from './protocol/publication';
 export {
   decodeRitoFootnote,
@@ -38,6 +39,7 @@ export {
   encodeRitoForegroundHandoff,
   encodeRitoAdjacentRequest,
   encodeRitoArtifactRequest,
+  RITO_DEFAULT_BACKGROUND_PAGES_PER_QUANTUM,
   type RitoAdjacentRequest,
   type RitoArtifactRequest,
   type RitoLayoutRequest,

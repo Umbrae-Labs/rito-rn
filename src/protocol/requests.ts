@@ -79,7 +79,12 @@ export interface RitoForegroundHandoff {
 export interface RitoBackgroundRequest {
   readonly sessionId: bigint;
   readonly expectedVisibleArtifactId: bigint;
+  /** The most pages one call lays the publication out by; defaults to 4, as the browser and Flutter hosts use. */
+  readonly maxPagesPerQuantum?: number;
 }
+
+/** Pages per background call when a host gives no budget. */
+export const RITO_DEFAULT_BACKGROUND_PAGES_PER_QUANTUM = 4;
 
 export interface RitoBackgroundHandoff {
   readonly sessionId: bigint;
@@ -94,11 +99,13 @@ export function encodeRitoForegroundHandoff(request: RitoForegroundHandoff): Uin
 }
 
 export function encodeRitoBackgroundRequest(request: RitoBackgroundRequest): Uint8Array {
-  // Rito 2.0.0 retains a non-zero u32 work-budget field in its 40-byte
-  // RITOBGQ1 message, but only validates it: publication layout runs in
-  // one call. Keep this wire requirement out of the host scheduling API.
+  // Each call lays out at most this many more pages; the engine rejects zero.
+  const pages = request.maxPagesPerQuantum ?? RITO_DEFAULT_BACKGROUND_PAGES_PER_QUANTUM;
+  if (!Number.isInteger(pages) || pages < 1 || pages > 0xffff_ffff) {
+    throw new RitoWireError('Rito background page budget must be an integer within 1..=0xffffffff.');
+  }
   return finishFixedMessage(new RitoBinaryWriter().writeAscii('RITOBGQ1').writeU32(1).writeU64(0n)
-    .writeU64(request.sessionId).writeU64(request.expectedVisibleArtifactId).writeU32(1), 40);
+    .writeU64(request.sessionId).writeU64(request.expectedVisibleArtifactId).writeU32(pages), 40);
 }
 
 export function encodeRitoBackgroundHandoff(request: RitoBackgroundHandoff): Uint8Array {

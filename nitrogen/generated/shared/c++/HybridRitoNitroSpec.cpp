@@ -27,6 +27,7 @@ namespace margelo::nitro::ritonitro {
       prototype.registerHybridMethod("search", &HybridRitoNitroSpec::search);
       prototype.registerHybridMethod("textRangeGeometry", &HybridRitoNitroSpec::textRangeGeometry);
       prototype.registerHybridMethod("resolveExactSourceRange", &HybridRitoNitroSpec::resolveExactSourceRange);
+      prototype.registerHybridMethod("readPage", &HybridRitoNitroSpec::readPage);
       prototype.registerHybridMethod("readFootnote", &HybridRitoNitroSpec::readFootnote);
       prototype.registerHybridMethod("releaseArtifact", &HybridRitoNitroSpec::releaseArtifact);
       prototype.registerHybridMethod("disposeSession", &HybridRitoNitroSpec::disposeSession);
