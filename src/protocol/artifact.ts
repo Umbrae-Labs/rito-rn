@@ -3,17 +3,19 @@ import { RitoBinaryReader } from './binary';
 import { decodeRitoReaderPrimitiveList } from './rito2/reader-session-primitive-decoder-runtime.js';
 import type {
   RitoAdjacentAvailability, RitoArtifact, RitoDisplayListPayload, RitoFontRef, RitoHitEntry, RitoHitKind,
-  RitoLocatorMatch, RitoNavigation, RitoPage, RitoRect, RitoResourceKind, RitoResourceRef,
+  RitoLocatorMatch, RitoNavigation, RitoPage, RitoPageRecords, RitoRect, RitoResourceKind, RitoResourceRef,
   RitoSemanticNode, RitoSemanticRole, RitoTextProfile, RitoTextRunOffset,
 } from './artifact-types';
 import { readRitoLocator, readRitoSourcePoint } from './locator';
 
 const MAX_WIRE_BYTES = 256 * 1024 * 1024;
+export const RITO_READER_PROTOCOL_VERSION = 7;
+const DISPLAY_LIST_FORMAT_VERSION = 4;
 
 export function decodeRitoArtifact(data: Uint8Array): RitoArtifact {
   const reader = openMessage(data, 'RITOART1', MAX_WIRE_BYTES, 'artifact');
   const protocolVersion = reader.readU32();
-  if (protocolVersion !== 6) throw new RitoWireError(`Unsupported artifact protocol version: ${protocolVersion}.`);
+  if (protocolVersion !== RITO_READER_PROTOCOL_VERSION) throw new RitoWireError(`Unsupported artifact protocol version: ${protocolVersion}.`);
   const capabilityProfileId = reader.readU32();
   if (capabilityProfileId !== 1) throw new RitoWireError(`Unsupported capability profile: ${capabilityProfileId}.`);
   const result: RitoArtifact = {
@@ -39,6 +41,21 @@ export function decodeRitoArtifact(data: Uint8Array): RitoArtifact {
     resources: readCollection(reader, 'resources', () => reader.readRecord('resource', readResourceRef)),
     fonts: readCollection(reader, 'fonts', () => reader.readRecord('font', readFontRef)),
     pages: readCollection(reader, 'pages', () => reader.readRecord('page', readPage)),
+  };
+  reader.expectExhausted();
+  return result;
+}
+
+/** Decodes a RITOPGR1 message: what one page of a live artifact holds, read when the host first needs it. */
+export function decodeRitoPageRecords(data: Uint8Array): RitoPageRecords {
+  const reader = openMessage(data, 'RITOPGR1', MAX_WIRE_BYTES, 'page records');
+  const result: RitoPageRecords = {
+    artifactId: reader.readExternalId('page records artifact id'),
+    pageIndex: reader.readU32(),
+    hits: readCollection(reader, 'page hits', () => reader.readRecord('hit', readHit)),
+    semantics: readCollection(reader, 'page semantics', () => reader.readRecord('semantic node', (record) => readSemantic(record, 0))),
+    text: reader.readUtf8(), textLength: reader.readU64(),
+    textRuns: readCollection(reader, 'page text runs', () => reader.readRecord('text run', (record): RitoTextRunOffset => ({ start: record.readU64(), end: record.readU64(), blockIndex: record.readU32(), lineIndex: record.readU32(), runIndex: record.readU32() }))),
   };
   reader.expectExhausted();
   return result;
@@ -70,15 +87,14 @@ function openMessage(data: Uint8Array, magic: string, max: number, label: string
 function readDisplayListPayload(reader: RitoBinaryReader): RitoDisplayListPayload {
   return reader.readRecord('display list', (record) => {
     const formatVersion = record.readU32();
-    if (formatVersion !== 2) throw new RitoWireError(`Unsupported RITODL1 format version: ${formatVersion}.`);
+    if (formatVersion !== DISPLAY_LIST_FORMAT_VERSION) throw new RitoWireError(`Unsupported RITODL1 format version: ${formatVersion}.`);
     const commandCount = record.readU32();
-    const semanticDigest = record.readFixedBytes(32, 'display list digest');
     const wireBytes = record.readBlob('display list bytes');
     const displayList = decodeRitoReaderPrimitiveList(wireBytes);
-    if (displayList.formatVersion !== formatVersion || displayList.commands.length !== commandCount) {
+    if (displayList.formatVersion !== formatVersion || displayList.commandCount !== commandCount || displayList.commands.length !== commandCount) {
       throw new RitoWireError('Display list metadata does not match RITODL1 bytes.');
     }
-    return { formatVersion: displayList.formatVersion, commandCount, semanticDigest, wireBytes, displayList };
+    return { formatVersion: displayList.formatVersion, commandCount, wireBytes, displayList };
   });
 }
 
@@ -91,13 +107,7 @@ function readFontRef(reader: RitoBinaryReader): RitoFontRef {
 }
 
 function readPage(reader: RitoBinaryReader): RitoPage {
-  return {
-    pageIndex: reader.readU32(), width: reader.readF64(), height: reader.readF64(),
-    hits: readCollection(reader, 'page hits', () => reader.readRecord('hit', readHit)),
-    semantics: readCollection(reader, 'page semantics', () => reader.readRecord('semantic node', (record) => readSemantic(record, 0))),
-    text: reader.readUtf8(), textLength: reader.readU64(),
-    textRuns: readCollection(reader, 'page text runs', () => reader.readRecord('text run', (record): RitoTextRunOffset => ({ start: record.readU64(), end: record.readU64(), blockIndex: record.readU32(), lineIndex: record.readU32(), runIndex: record.readU32() }))),
-  };
+  return { pageIndex: reader.readU32(), width: reader.readF64(), height: reader.readF64() };
 }
 
 function readHit(reader: RitoBinaryReader): RitoHitEntry {

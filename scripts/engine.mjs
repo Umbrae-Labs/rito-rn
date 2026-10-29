@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const checkout = path.join(root, 'upstream/rito');
 const lockPath = path.join(root, 'engine.lock.json');
-const crates = ['rito-core', 'rito-ffi', 'rito-block', 'rito-fragment', 'rito-inline', 'rito-source', 'rito-style-contract', 'rito-stylo'];
+const crates = ['rito-core', 'rito-ffi', 'rito-block', 'rito-fragment', 'rito-inline', 'rito-source', 'rito-style-contract', 'rito-stylo', 'rito-turn'];
 export const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 export function registryPins(lockText) {
   return lockText.split('[[package]]').filter((entry) => /^source = /m.test(entry)).map((entry) => {
@@ -168,6 +168,7 @@ async function main() {
     for (const params of [
       ['test', '--locked', '-p', 'rito-block', '-p', 'rito-core', '-p', 'rito-stylo', '-p', 'rito-style-contract', '--lib'],
       ['test', '--locked', '-p', 'rito-stylo', '--test', 'layout_style'],
+      ['test', '--locked', '-p', 'rito-turn'],
       ['check', '--locked', '-p', 'rito-ffi', '--lib'],
     ]) execFileSync('cargo', [`+${lock.rustVersion}`, ...params], { cwd: workspace, env, stdio: 'inherit' });
   } else throw new Error('Usage: engine.mjs export|verify|update|test');
