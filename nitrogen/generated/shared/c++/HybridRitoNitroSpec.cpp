@@ -31,6 +31,33 @@ namespace margelo::nitro::ritonitro {
       prototype.registerHybridMethod("readFootnote", &HybridRitoNitroSpec::readFootnote);
       prototype.registerHybridMethod("releaseArtifact", &HybridRitoNitroSpec::releaseArtifact);
       prototype.registerHybridMethod("disposeSession", &HybridRitoNitroSpec::disposeSession);
+      prototype.registerHybridMethod("openWithoutPinnedFonts", &HybridRitoNitroSpec::openWithoutPinnedFonts);
+      prototype.registerHybridMethod("openShards", &HybridRitoNitroSpec::openShards);
+      prototype.registerHybridMethod("supplyShard", &HybridRitoNitroSpec::supplyShard);
+      prototype.registerHybridMethod("contentShardsNear", &HybridRitoNitroSpec::contentShardsNear);
+      prototype.registerHybridMethod("peekSpread", &HybridRitoNitroSpec::peekSpread);
+      prototype.registerHybridMethod("resolveTextInteraction", &HybridRitoNitroSpec::resolveTextInteraction);
+      prototype.registerHybridMethod("resolveAnnotation", &HybridRitoNitroSpec::resolveAnnotation);
+      prototype.registerHybridMethod("resolveNavigation", &HybridRitoNitroSpec::resolveNavigation);
+      prototype.registerHybridMethod("fontCatalog", &HybridRitoNitroSpec::fontCatalog);
+      prototype.registerHybridMethod("unresolvedFontFamilies", &HybridRitoNitroSpec::unresolvedFontFamilies);
+      prototype.registerHybridMethod("addHostFontFaces", &HybridRitoNitroSpec::addHostFontFaces);
+      prototype.registerHybridMethod("removeHostFontFaces", &HybridRitoNitroSpec::removeHostFontFaces);
+      prototype.registerHybridMethod("markFontFamilyUnavailable", &HybridRitoNitroSpec::markFontFamilyUnavailable);
+      prototype.registerHybridMethod("paperTurnLayouts", &HybridRitoNitroSpec::paperTurnLayouts);
+      prototype.registerHybridMethod("paperTurnNew", &HybridRitoNitroSpec::paperTurnNew);
+      prototype.registerHybridMethod("paperTurnFree", &HybridRitoNitroSpec::paperTurnFree);
+      prototype.registerHybridMethod("paperTurnBegin", &HybridRitoNitroSpec::paperTurnBegin);
+      prototype.registerHybridMethod("paperTurnLay", &HybridRitoNitroSpec::paperTurnLay);
+      prototype.registerHybridMethod("paperTurnSheet", &HybridRitoNitroSpec::paperTurnSheet);
+      prototype.registerHybridMethod("paperTurnForget", &HybridRitoNitroSpec::paperTurnForget);
+      prototype.registerHybridMethod("paperTurnState", &HybridRitoNitroSpec::paperTurnState);
+      prototype.registerHybridMethod("paperTurnBegins", &HybridRitoNitroSpec::paperTurnBegins);
+      prototype.registerHybridMethod("paperTurnSettle", &HybridRitoNitroSpec::paperTurnSettle);
+      prototype.registerHybridMethod("paperTurnSettleStep", &HybridRitoNitroSpec::paperTurnSettleStep);
+      prototype.registerHybridMethod("paperTurnTravel", &HybridRitoNitroSpec::paperTurnTravel);
+      prototype.registerHybridMethod("paperTurnLands", &HybridRitoNitroSpec::paperTurnLands);
+      prototype.registerHybridMethod("paperTurnEyeHeight", &HybridRitoNitroSpec::paperTurnEyeHeight);
     });
   }
 

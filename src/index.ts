@@ -1,11 +1,19 @@
 export {
+  getRitoNativePaperTurnModule,
   getRitoNativeReaderModule,
   isRitoNativeReaderAvailable,
   type RitoNativeCallResult,
+  type RitoNativePaperTurnModule,
   type RitoNativePinnedFontFace,
   type RitoNativeReaderModule,
 } from './native';
-export { RitoNativeError, RitoNativeModuleUnavailableError, RitoNativeSessionInvalidatedError, RitoWireError } from './errors';
+export {
+  RitoNativeError,
+  RitoNativeModuleUnavailableError,
+  RitoNativeSessionInvalidatedError,
+  RitoResourcePendingError,
+  RitoWireError,
+} from './errors';
 export {
   RitoBinaryReader,
   RitoBinaryWriter,
@@ -44,8 +52,58 @@ export {
   type RitoArtifactRequest,
   type RitoLayoutRequest,
   type RitoLocator,
+  type RitoSpreadMode,
   type RitoForegroundHandoff,
   type RitoBackgroundRequest,
   type RitoBackgroundHandoff,
 } from './protocol/requests';
+export {
+  decodeRitoAnnotationResponse,
+  decodeRitoFontCatalog,
+  decodeRitoFontNames,
+  decodeRitoNavigationResult,
+  decodeRitoPendingShards,
+  decodeRitoShardIds,
+  decodeRitoTextInteractionResponse,
+  encodeRitoAnnotationRequest,
+  encodeRitoNavigationRequest,
+  encodeRitoSpreadRequest,
+  encodeRitoTextInteractionRequest,
+} from './protocol/queries';
+export type * from './protocol/queries';
+export type {
+  RitoCoreWasmFontFamily,
+  RitoCoreWasmFontFamilyFace,
+  RitoReaderAnnotationLevel,
+  RitoReaderAnnotationTarget,
+  RitoReaderCaret,
+  RitoReaderCaretAddress,
+  RitoReaderCaretGeometry,
+  RitoReaderLocation,
+  RitoReaderRevisionLayout,
+  RitoReaderScrollAxis,
+  RitoReaderSelectionMovement,
+  RitoReaderTextInteractionQuery,
+  RitoReaderTextInteractionResult,
+  RitoReaderTextInteractionUnavailableReason,
+  RitoReaderTextPoint,
+  RitoReaderTextSelection,
+  RitoReaderWritingMode,
+} from './protocol/rito2/types';
+export {
+  encodeRitoPaperTurnFrame,
+  encodeRitoPaperTurnRelease,
+  RitoPaperTurn,
+  type RitoPaperTurnBegun,
+  type RitoPaperTurnFace,
+  type RitoPaperTurnFrame,
+  type RitoPaperTurnLaid,
+  type RitoPaperTurnLayouts,
+  type RitoPaperTurnPage,
+  type RitoPaperTurnRelease,
+  type RitoPaperTurnSettleStep,
+  type RitoPaperTurnSheet,
+  type RitoPaperTurnState,
+  type RitoPaperTurnTouch,
+} from './paper-turn';
 export { RitoReaderSession, type RitoReaderSessionOptions } from './session';

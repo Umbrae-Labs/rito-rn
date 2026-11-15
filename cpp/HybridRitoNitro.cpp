@@ -1,10 +1,12 @@
 #include "HybridRitoNitro.hpp"
 
+#include <algorithm>
 #include <array>
 #include <charconv>
 #include <cmath>
 #include <cstring>
 #include <functional>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -138,6 +140,82 @@ RitoFfiResult invokeOpen(std::vector<std::uint8_t> publication, std::vector<std:
 
 using WireOperation = std::uint32_t (*)(std::uint64_t, const std::uint8_t*, std::uint64_t, rito_owned_buffer*, rito_owned_buffer*);
 
+constexpr std::uint64_t kShardKeyBytes = 32;
+constexpr double kMaximumPaperTurnIds = 65536;
+constexpr double kMaximumSheetFloats = 64.0 * 1024.0 * 1024.0;
+
+std::vector<std::uint8_t> copyShardKey(const std::shared_ptr<ArrayBuffer>& key) {
+  auto bytes = copyBinary(key, kShardKeyBytes, "shard key");
+  if (!bytes.empty() && bytes.size() != kShardKeyBytes) throw std::invalid_argument("A shard key must be empty or 32 bytes.");
+  return bytes;
+}
+
+std::vector<rito_pinned_font_face> ffiFaces(const std::vector<OwnedPinnedFont>& fonts) {
+  std::vector<rito_pinned_font_face> result;
+  result.reserve(fonts.size());
+  for (const auto& font : fonts) result.push_back(font.toFfi());
+  return result;
+}
+
+/** A call whose only output is its status and diagnostic. */
+RitoFfiResult statusOnly(std::uint32_t status, rito_owned_buffer* error) {
+  rito_owned_buffer output{};
+  return ritojs::reactnative::collectRitoResult(status, &output, error);
+}
+
+/** Little-endian u32 values, as the wire carries them. */
+std::vector<std::uint8_t> littleEndian(const std::uint32_t* values, std::size_t count) {
+  std::vector<std::uint8_t> bytes(count * 4);
+  for (std::size_t index = 0; index < count; ++index) {
+    for (std::size_t shift = 0; shift < 4; ++shift) bytes[index * 4 + shift] = static_cast<std::uint8_t>(values[index] >> (shift * 8));
+  }
+  return bytes;
+}
+
+/** Throws the diagnostic of a failed synchronous call; frees the error buffer either way. */
+void requireOk(std::uint32_t status, rito_owned_buffer* error, const char* operation) {
+  if (status == RITO_STATUS_OK) {
+    rito_buffer_free(error);
+    return;
+  }
+  std::string message;
+  try {
+    message = ritojs::reactnative::copyOwnedError(error);
+  } catch (...) {
+    message.clear();
+  }
+  if (message.empty()) message = "failed with status " + std::to_string(status) + ".";
+  throw std::runtime_error(std::string("Rito ") + operation + ": " + message);
+}
+
+std::uint32_t requireCount(double value, double maximum, const char* field) {
+  if (!std::isfinite(value) || value < 0 || value > maximum || std::floor(value) != value) {
+    throw std::invalid_argument(std::string(field) + " must be an integer within 0..=" + std::to_string(static_cast<std::uint64_t>(maximum)) + ".");
+  }
+  return static_cast<std::uint32_t>(value);
+}
+
+std::uint64_t requireEpoch(double value) {
+  if (!std::isfinite(value) || value < 0 || value > 9007199254740991.0 || std::floor(value) != value) {
+    throw std::invalid_argument("A paper turn epoch must be a non-negative safe integer.");
+  }
+  return static_cast<std::uint64_t>(value);
+}
+
+void requireLength(const std::vector<double>& numbers, std::uint32_t length, const char* field) {
+  if (numbers.size() != length) throw std::invalid_argument(std::string(field) + " must hold " + std::to_string(length) + " numbers.");
+}
+
+std::vector<double> leafIds(const std::vector<std::uint32_t>& leaves, std::uint32_t count) {
+  return {leaves.begin(), leaves.begin() + static_cast<std::ptrdiff_t>(std::min<std::size_t>(count, leaves.size()))};
+}
+
+std::shared_ptr<ArrayBuffer> floatBuffer(const std::vector<float>& values) {
+  std::vector<std::uint8_t> bytes(values.size() * sizeof(float));
+  if (!bytes.empty()) std::memcpy(bytes.data(), values.data(), bytes.size());
+  return ArrayBuffer::move(std::move(bytes));
+}
+
 RitoFfiResult invokeWire(std::uint64_t session, std::vector<std::uint8_t> request, WireOperation operation) {
   rito_owned_buffer output{};
   rito_owned_buffer error{};
@@ -177,6 +255,10 @@ RITO_WIRE_METHOD(adoptBackground, rito_adopt_background_candidate)
 RITO_WIRE_METHOD(search, rito_search)
 RITO_WIRE_METHOD(textRangeGeometry, rito_get_text_range_geometry)
 RITO_WIRE_METHOD(resolveExactSourceRange, rito_resolve_exact_source_range)
+RITO_WIRE_METHOD(peekSpread, rito_peek_spread)
+RITO_WIRE_METHOD(resolveTextInteraction, rito_resolve_text_interaction)
+RITO_WIRE_METHOD(resolveAnnotation, rito_resolve_annotation)
+RITO_WIRE_METHOD(resolveNavigation, rito_resolve_navigation)
 
 #undef RITO_WIRE_METHOD
 
@@ -214,6 +296,205 @@ std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::releaseArtifact(const
     const auto status = rito_release_artifact(session, artifact, &error);
     return ritojs::reactnative::collectRitoResult(status, &output, &error);
   });
+}
+
+std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::openWithoutPinnedFonts(const std::shared_ptr<ArrayBuffer>& publication, const std::shared_ptr<ArrayBuffer>& request) {
+  return submitChecked(executor_, [publication = copyBinary(publication, kMaximumPublicationBytes, "publication"), request = copyBinary(request, kMaximumRequestBytes, "request")]() mutable {
+    rito_owned_buffer artifact{}; rito_owned_buffer error{};
+    const auto status = rito_open(publication.data(), publication.size(), request.data(), request.size(), &artifact, &error);
+    return ritojs::reactnative::collectRitoResult(status, &artifact, &error);
+  });
+}
+
+std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::openShards(const std::shared_ptr<ArrayBuffer>& skeleton, const std::shared_ptr<ArrayBuffer>& key, const std::shared_ptr<ArrayBuffer>& request, const std::vector<RitoNitroPinnedFontFace>& fonts) {
+  return submitChecked(executor_, [skeleton = copyBinary(skeleton, kMaximumPublicationBytes, "skeleton"), key = copyShardKey(key), request = copyBinary(request, kMaximumRequestBytes, "request"), fonts = copyFonts(fonts)]() mutable {
+    const auto faces = ffiFaces(fonts);
+    rito_owned_buffer artifact{}; rito_owned_buffer error{};
+    const auto status = rito_open_shards_with_pinned_fonts(skeleton.data(), skeleton.size(), key.empty() ? nullptr : key.data(), key.size(), request.data(), request.size(), faces.data(), static_cast<std::uint32_t>(faces.size()), &artifact, &error);
+    return ritojs::reactnative::collectRitoResult(status, &artifact, &error);
+  });
+}
+
+std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::supplyShard(const std::string& sessionId, const std::shared_ptr<ArrayBuffer>& shard, const std::shared_ptr<ArrayBuffer>& key) {
+  return submitChecked(executor_, [session = parseExternalId(sessionId, "sessionId"), shard = copyBinary(shard, kMaximumPublicationBytes, "shard"), key = copyShardKey(key)]() mutable {
+    if (shard.empty()) throw std::invalid_argument("A shard must not be empty.");
+    std::uint32_t shardId = 0;
+    rito_owned_buffer error{};
+    const auto status = rito_supply_shard(session, shard.data(), shard.size(), key.empty() ? nullptr : key.data(), key.size(), &shardId, &error);
+    auto result = statusOnly(status, &error);
+    if (result.status == RITO_STATUS_OK) result.data = littleEndian(&shardId, 1);
+    return result;
+  });
+}
+
+std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::contentShardsNear(const std::string& sessionId, const std::string& href) {
+  return submitChecked(executor_, [session = parseExternalId(sessionId, "sessionId"), href] {
+    if (href.empty()) throw std::invalid_argument("content shard href must not be empty.");
+    rito_owned_buffer output{}; rito_owned_buffer error{};
+    const auto status = rito_content_shards_near(session, reinterpret_cast<const std::uint8_t*>(href.data()), href.size(), &output, &error);
+    return ritojs::reactnative::collectRitoResult(status, &output, &error);
+  });
+}
+
+std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::fontCatalog(const std::string& sessionId) {
+  return submitChecked(executor_, [session = parseExternalId(sessionId, "sessionId")] {
+    rito_owned_buffer output{}; rito_owned_buffer error{};
+    return ritojs::reactnative::collectRitoResult(rito_font_catalog(session, &output, &error), &output, &error);
+  });
+}
+
+std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::unresolvedFontFamilies(const std::string& sessionId, const std::string& list) {
+  return submitChecked(executor_, [session = parseExternalId(sessionId, "sessionId"), list] {
+    if (list.size() > kMaximumRequestBytes) throw std::invalid_argument("font-family list exceeds its ABI limit.");
+    rito_owned_buffer output{}; rito_owned_buffer error{};
+    const auto status = rito_unresolved_font_families(session, reinterpret_cast<const std::uint8_t*>(list.data()), list.size(), &output, &error);
+    return ritojs::reactnative::collectRitoResult(status, &output, &error);
+  });
+}
+
+std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::addHostFontFaces(const std::string& sessionId, const std::vector<RitoNitroPinnedFontFace>& fonts) {
+  return submitChecked(executor_, [session = parseExternalId(sessionId, "sessionId"), fonts = copyFonts(fonts)] {
+    const auto faces = ffiFaces(fonts);
+    rito_owned_buffer error{};
+    return statusOnly(rito_add_host_font_faces(session, faces.data(), static_cast<std::uint32_t>(faces.size()), &error), &error);
+  });
+}
+
+std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::removeHostFontFaces(const std::string& sessionId, const std::vector<std::string>& sha256) {
+  return submitChecked(executor_, [session = parseExternalId(sessionId, "sessionId"), sha256] {
+    if (sha256.empty()) throw std::invalid_argument("At least one font digest is required.");
+    std::vector<std::uint8_t> digests;
+    digests.reserve(sha256.size() * 64);
+    for (const auto& digest : sha256) {
+      const auto parsed = parseDigest(digest);
+      digests.insert(digests.end(), parsed.begin(), parsed.end());
+    }
+    rito_owned_buffer error{};
+    return statusOnly(rito_remove_host_font_faces(session, digests.data(), static_cast<std::uint32_t>(sha256.size()), &error), &error);
+  });
+}
+
+std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::markFontFamilyUnavailable(const std::string& sessionId, const std::string& family) {
+  return submitChecked(executor_, [session = parseExternalId(sessionId, "sessionId"), family] {
+    if (family.empty()) throw std::invalid_argument("font family must not be empty.");
+    rito_owned_buffer error{};
+    return statusOnly(rito_mark_font_family_unavailable(session, reinterpret_cast<const std::uint8_t*>(family.data()), family.size(), &error), &error);
+  });
+}
+
+// The paper turn's model runs synchronously on the calling thread: a host
+// steps it once a frame, so it never waits behind a session's actor.
+
+std::vector<double> HybridRitoNitro::paperTurnLayouts() {
+  std::array<std::uint32_t, 7> layouts{};
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_layouts(layouts.data(), &error), &error, "paperTurnLayouts");
+  return {layouts.begin(), layouts.end()};
+}
+
+std::string HybridRitoNitro::paperTurnNew() {
+  std::uint64_t turn = 0;
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_new(&turn, &error), &error, "paperTurnNew");
+  return std::to_string(turn);
+}
+
+void HybridRitoNitro::paperTurnFree(const std::string& turn) {
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_free(parseExternalId(turn, "turn"), &error), &error, "paperTurnFree");
+}
+
+RitoNitroPaperTurnLeaves HybridRitoNitro::paperTurnBegin(const std::string& turn, const std::vector<double>& frame, double leavesCapacity) {
+  requireLength(frame, RITO_PAPER_TURN_FRAME_NUMBERS, "A paper turn frame");
+  std::vector<double> begun(RITO_PAPER_TURN_BEGUN_NUMBERS);
+  std::vector<std::uint32_t> leaves(requireCount(leavesCapacity, kMaximumPaperTurnIds, "leavesCapacity"));
+  std::uint32_t count = 0;
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_begin(parseExternalId(turn, "turn"), frame.data(), begun.data(), leaves.data(), static_cast<std::uint32_t>(leaves.size()), &count, &error), &error, "paperTurnBegin");
+  return RitoNitroPaperTurnLeaves(std::move(begun), leafIds(leaves, count));
+}
+
+RitoNitroPaperTurnLeaves HybridRitoNitro::paperTurnLay(const std::string& turn, double epoch, double leavesCapacity) {
+  std::vector<double> laid(RITO_PAPER_TURN_LAID_NUMBERS);
+  std::vector<std::uint32_t> leaves(requireCount(leavesCapacity, kMaximumPaperTurnIds, "leavesCapacity"));
+  std::uint32_t count = 0;
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_lay(parseExternalId(turn, "turn"), requireEpoch(epoch), laid.data(), leaves.data(), static_cast<std::uint32_t>(leaves.size()), &count, &error), &error, "paperTurnLay");
+  return RitoNitroPaperTurnLeaves(std::move(laid), leafIds(leaves, count));
+}
+
+RitoNitroPaperTurnSheet HybridRitoNitro::paperTurnSheet(const std::string& turn, double index, double pointsCapacity) {
+  const auto sheetIndex = requireCount(index, 4294967295.0, "sheet index");
+  const auto capacity = requireCount(pointsCapacity, kMaximumSheetFloats, "pointsCapacity");
+  std::vector<double> numbers(RITO_PAPER_TURN_SHEET_NUMBERS);
+  std::vector<float> positions(capacity);
+  std::vector<float> normals(capacity);
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_sheet(parseExternalId(turn, "turn"), sheetIndex, numbers.data(), capacity == 0 ? nullptr : positions.data(), capacity == 0 ? nullptr : normals.data(), capacity, &error), &error, "paperTurnSheet");
+  if (capacity == 0) return RitoNitroPaperTurnSheet(std::move(numbers), std::nullopt, std::nullopt);
+  return RitoNitroPaperTurnSheet(std::move(numbers), floatBuffer(positions), floatBuffer(normals));
+}
+
+RitoNitroPaperTurnForgotten HybridRitoNitro::paperTurnForget(const std::string& turn, double epoch, double leavesCapacity) {
+  std::uint32_t release = 0;
+  std::vector<std::uint32_t> leaves(requireCount(leavesCapacity, kMaximumPaperTurnIds, "leavesCapacity"));
+  std::uint32_t count = 0;
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_forget(parseExternalId(turn, "turn"), requireEpoch(epoch), &release, leaves.data(), static_cast<std::uint32_t>(leaves.size()), &count, &error), &error, "paperTurnForget");
+  return RitoNitroPaperTurnForgotten(release != 0, leafIds(leaves, count));
+}
+
+std::vector<double> HybridRitoNitro::paperTurnState(const std::string& turn, double now) {
+  std::vector<double> state(RITO_PAPER_TURN_STATE_NUMBERS);
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_state(parseExternalId(turn, "turn"), now, state.data(), &error), &error, "paperTurnState");
+  return state;
+}
+
+std::vector<double> HybridRitoNitro::paperTurnBegins(const std::string& turn, double dx, double velocity, bool sameSpreads) {
+  std::vector<double> begins(2);
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_begins(parseExternalId(turn, "turn"), dx, velocity, sameSpreads ? 1 : 0, begins.data(), &error), &error, "paperTurnBegins");
+  return begins;
+}
+
+std::vector<double> HybridRitoNitro::paperTurnSettle(const std::string& turn, double from, double velocity, double to) {
+  std::vector<double> settle(RITO_PAPER_TURN_SETTLE_NUMBERS);
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_settle(parseExternalId(turn, "turn"), from, velocity, to, settle.data(), &error), &error, "paperTurnSettle");
+  return settle;
+}
+
+RitoNitroPaperTurnSettleStep HybridRitoNitro::paperTurnSettleStep(const std::string& turn, const std::vector<double>& settle, double seconds, double now) {
+  requireLength(settle, RITO_PAPER_TURN_SETTLE_NUMBERS, "A paper turn settle");
+  std::vector<double> held = settle;
+  std::vector<double> at(3);
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_settle_step(parseExternalId(turn, "turn"), held.data(), seconds, now, at.data(), &error), &error, "paperTurnSettleStep");
+  return RitoNitroPaperTurnSettleStep(std::move(held), std::move(at));
+}
+
+double HybridRitoNitro::paperTurnTravel(const std::vector<double>& touch, double width, double spine) {
+  requireLength(touch, 4, "A paper turn touch");
+  double travel = 0;
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_travel(touch.data(), width, spine, &travel, &error), &error, "paperTurnTravel");
+  return travel;
+}
+
+bool HybridRitoNitro::paperTurnLands(const std::vector<double>& release) {
+  requireLength(release, RITO_PAPER_TURN_RELEASE_NUMBERS, "A paper turn release");
+  std::uint32_t lands = 0;
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_lands(release.data(), &lands, &error), &error, "paperTurnLands");
+  return lands != 0;
+}
+
+double HybridRitoNitro::paperTurnEyeHeight(double width, double height) {
+  double eye = 0;
+  rito_owned_buffer error{};
+  requireOk(rito_paper_turn_eye_height(width, height, &eye, &error), &error, "paperTurnEyeHeight");
+  return eye;
 }
 
 std::shared_ptr<Promise<RitoNitroResult>> HybridRitoNitro::disposeSession(const std::string& sessionId) {
