@@ -129,10 +129,10 @@ function artifactWire(sessionId: bigint, requestId: bigint, artifactId: bigint):
     .writeU32(0).writeU8(0).writeUtf8('').writeU32(0).toUint8Array();
   const writer = new RitoBinaryWriter()
     .writeAscii('RITOART1').writeU32(1).writeU64(0n)
-    .writeU32(7).writeU32(1).writeU64(sessionId).writeU64(requestId).writeU64(1n).writeU32(1).writeU64(artifactId)
+    .writeU32(9).writeU32(1).writeU64(sessionId).writeU64(requestId).writeU64(1n).writeU32(1).writeU64(artifactId)
     .writeRecord((locator) => locator.writeUtf8('chapter.xhtml').writeU8(0).writeU8(0).writeU8(0).writeU8(0))
     .writeU32(4).writeU32(0).writeU32(0).writeU32(1).writeU32(1)
-    .writeF64(390).writeF64(844).writeU8(0).writeU8(0)
+    .writeF64(390).writeF64(844).writeU8(0).writeU8(0).writeU8(0)
     .writeU32(0).writeU32(0).writeU32(0)
     .writeRecord((displayRecord) => displayRecord.writeU32(4).writeU32(0).writeU64(BigInt(display.byteLength)).writeBytes(display))
     .writeU32(0).writeU32(0).writeU32(0);

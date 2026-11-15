@@ -2,14 +2,14 @@ import { RitoWireError } from '../errors';
 import { RitoBinaryReader } from './binary';
 import { decodeRitoReaderPrimitiveList } from './rito2/reader-session-primitive-decoder-runtime.js';
 import type {
-  RitoAdjacentAvailability, RitoArtifact, RitoDisplayListPayload, RitoFontRef, RitoHitEntry, RitoHitKind,
+  RitoAdjacentAvailability, RitoArtifact, RitoDisplayListPayload, RitoFontFeature, RitoFontRef, RitoHitEntry, RitoHitKind,
   RitoLocatorMatch, RitoNavigation, RitoPage, RitoPageRecords, RitoRect, RitoResourceKind, RitoResourceRef,
   RitoSemanticNode, RitoSemanticRole, RitoTextProfile, RitoTextRunOffset,
 } from './artifact-types';
 import { readRitoLocator, readRitoSourcePoint } from './locator';
 
 const MAX_WIRE_BYTES = 256 * 1024 * 1024;
-export const RITO_READER_PROTOCOL_VERSION = 7;
+export const RITO_READER_PROTOCOL_VERSION = 9;
 const DISPLAY_LIST_FORMAT_VERSION = 4;
 
 export function decodeRitoArtifact(data: Uint8Array): RitoArtifact {
@@ -35,6 +35,7 @@ export function decodeRitoArtifact(data: Uint8Array): RitoArtifact {
     height: reader.readF64(),
     bookPageIndex: reader.readOption('book page index', () => reader.readU32()),
     bookPageCount: reader.readOption('book page count', () => reader.readU32()),
+    targetBlockOffset: reader.readOption('target block offset', () => reader.readF64()),
     navigation: { previous: readAvailability(reader), next: readAvailability(reader) },
     textProfile: readEnum(reader, ['platform-string-runs', 'positioned-glyph-runs'] as const, 'text profile'),
     displayList: readDisplayListPayload(reader),
@@ -103,7 +104,11 @@ function readResourceRef(reader: RitoBinaryReader): RitoResourceRef {
 }
 
 function readFontRef(reader: RitoBinaryReader): RitoFontRef {
-  return { family: reader.readUtf8(), href: reader.readUtf8(), style: reader.readUtf8(), weight: reader.readU16(), shapeFingerprint: reader.readUtf8(), byteLength: reader.readU64() };
+  return {
+    family: reader.readUtf8(), href: reader.readUtf8(), style: reader.readUtf8(), weight: reader.readU16(),
+    shapeFingerprint: reader.readUtf8(), byteLength: reader.readU64(),
+    features: readCollection(reader, 'font features', (): RitoFontFeature => ({ tag: reader.readUtf8(), value: reader.readU32() })),
+  };
 }
 
 function readPage(reader: RitoBinaryReader): RitoPage {

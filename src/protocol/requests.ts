@@ -1,6 +1,9 @@
 import { RitoWireError } from '../errors';
 import { RitoBinaryWriter } from './binary';
 
+export type RitoSpreadMode = 'single' | 'double' | 'scrolled';
+const SPREAD_MODES: readonly RitoSpreadMode[] = ['single', 'double', 'scrolled'];
+
 export interface RitoLayoutRequest {
   readonly viewportWidth: number;
   readonly viewportHeight: number;
@@ -8,7 +11,11 @@ export interface RitoLayoutRequest {
   readonly marginRight: number;
   readonly marginBottom: number;
   readonly marginLeft: number;
-  readonly spreadMode: 'single' | 'double';
+  /**
+   * `scrolled` lays each chapter out as one continuous strip read through
+   * windows the size of the viewport, every window its own spread.
+   */
+  readonly spreadMode: RitoSpreadMode;
   readonly firstPageAlone: boolean;
   readonly spreadGap: number;
   readonly rootFontSize: number;
@@ -137,7 +144,7 @@ function writeLayout(writer: RitoBinaryWriter, value: RitoLayoutRequest): void {
     .writeF64(value.marginRight)
     .writeF64(value.marginBottom)
     .writeF64(value.marginLeft)
-    .writeU32(value.spreadMode === 'single' ? 0 : 1)
+    .writeU32(spreadModeTag(value.spreadMode))
     .writeU8(value.firstPageAlone ? 1 : 0)
     .writeF64(value.spreadGap)
     .writeF64(value.rootFontSize);
@@ -146,6 +153,12 @@ function writeLayout(writer: RitoBinaryWriter, value: RitoLayoutRequest): void {
   writer.writeF64(value.renderRatio ?? 1);
   writer.writeU8(value.lineHeightForce === false ? 0 : 1);
   writer.writeU8(value.fontFamilyForce === false ? 0 : 1);
+}
+
+function spreadModeTag(value: RitoSpreadMode): number {
+  const tag = SPREAD_MODES.indexOf(value);
+  if (tag < 0) throw new RitoWireError(`Unknown Rito spread mode: ${String(value)}.`);
+  return tag;
 }
 
 function writeLocator(writer: RitoBinaryWriter, value: RitoLocator): void {

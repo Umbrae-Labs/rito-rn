@@ -22,7 +22,15 @@ export interface RitoResourceRef { readonly kind: RitoResourceKind; readonly hre
 export interface RitoFontRef {
   readonly family: string; readonly href: string; readonly style: string; readonly weight: number;
   readonly shapeFingerprint: string; readonly byteLength: bigint;
+  /**
+   * OpenType features the face turns on wherever its family paints: the same
+   * bytes registered again under a family of their own (the vertical forms a
+   * vertical line's upright glyphs take). Empty for an ordinary face.
+   */
+  readonly features: readonly RitoFontFeature[];
 }
+/** One OpenType feature setting: its four-letter tag and value. */
+export interface RitoFontFeature { readonly tag: string; readonly value: number }
 export interface RitoResource {
   readonly artifactId: bigint; readonly kind: RitoResourceKind; readonly href: string; readonly mediaType: string;
   readonly bytes: Uint8Array; readonly width?: number; readonly height?: number;
@@ -55,6 +63,12 @@ export interface RitoArtifact {
   readonly locator: RitoLocator; readonly matchedBy: RitoLocatorMatch; readonly localPageIndex: number;
   readonly localSpreadIndex: number; readonly localPageIndexes: readonly number[]; readonly width: number; readonly height: number;
   readonly bookPageIndex?: number; readonly bookPageCount?: number;
+  /**
+   * Where the line the artifact's locator lands on starts in its scrolled
+   * window's display list, in CSS pixels from the window's block start.
+   * Absent for a spread of pages and for a window whose locator names no line.
+   */
+  readonly targetBlockOffset?: number;
   readonly navigation: RitoNavigation; readonly textProfile: RitoTextProfile; readonly displayList: RitoDisplayListPayload;
   readonly resources: readonly RitoResourceRef[]; readonly fonts: readonly RitoFontRef[]; readonly pages: readonly RitoPage[];
 }
