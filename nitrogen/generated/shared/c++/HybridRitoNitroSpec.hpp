@@ -17,6 +17,14 @@
 namespace margelo::nitro::ritonitro { struct RitoNitroResult; }
 // Forward declaration of `RitoNitroPinnedFontFace` to properly resolve imports.
 namespace margelo::nitro::ritonitro { struct RitoNitroPinnedFontFace; }
+// Forward declaration of `RitoNitroPaperTurnLeaves` to properly resolve imports.
+namespace margelo::nitro::ritonitro { struct RitoNitroPaperTurnLeaves; }
+// Forward declaration of `RitoNitroPaperTurnSheet` to properly resolve imports.
+namespace margelo::nitro::ritonitro { struct RitoNitroPaperTurnSheet; }
+// Forward declaration of `RitoNitroPaperTurnForgotten` to properly resolve imports.
+namespace margelo::nitro::ritonitro { struct RitoNitroPaperTurnForgotten; }
+// Forward declaration of `RitoNitroPaperTurnSettleStep` to properly resolve imports.
+namespace margelo::nitro::ritonitro { struct RitoNitroPaperTurnSettleStep; }
 
 #include "RitoNitroResult.hpp"
 #include <NitroModules/Promise.hpp>
@@ -24,6 +32,10 @@ namespace margelo::nitro::ritonitro { struct RitoNitroPinnedFontFace; }
 #include "RitoNitroPinnedFontFace.hpp"
 #include <vector>
 #include <string>
+#include "RitoNitroPaperTurnLeaves.hpp"
+#include "RitoNitroPaperTurnSheet.hpp"
+#include "RitoNitroPaperTurnForgotten.hpp"
+#include "RitoNitroPaperTurnSettleStep.hpp"
 
 namespace margelo::nitro::ritonitro {
 
@@ -73,6 +85,33 @@ namespace margelo::nitro::ritonitro {
       virtual std::shared_ptr<Promise<RitoNitroResult>> readFootnote(const std::string& sessionId, const std::string& artifactId, const std::string& key) = 0;
       virtual std::shared_ptr<Promise<RitoNitroResult>> releaseArtifact(const std::string& sessionId, const std::string& artifactId) = 0;
       virtual std::shared_ptr<Promise<RitoNitroResult>> disposeSession(const std::string& sessionId) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> openWithoutPinnedFonts(const std::shared_ptr<ArrayBuffer>& publication, const std::shared_ptr<ArrayBuffer>& request) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> openShards(const std::shared_ptr<ArrayBuffer>& skeleton, const std::shared_ptr<ArrayBuffer>& key, const std::shared_ptr<ArrayBuffer>& request, const std::vector<RitoNitroPinnedFontFace>& fonts) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> supplyShard(const std::string& sessionId, const std::shared_ptr<ArrayBuffer>& shard, const std::shared_ptr<ArrayBuffer>& key) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> contentShardsNear(const std::string& sessionId, const std::string& href) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> peekSpread(const std::string& sessionId, const std::shared_ptr<ArrayBuffer>& request) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> resolveTextInteraction(const std::string& sessionId, const std::shared_ptr<ArrayBuffer>& request) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> resolveAnnotation(const std::string& sessionId, const std::shared_ptr<ArrayBuffer>& request) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> resolveNavigation(const std::string& sessionId, const std::shared_ptr<ArrayBuffer>& request) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> fontCatalog(const std::string& sessionId) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> unresolvedFontFamilies(const std::string& sessionId, const std::string& list) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> addHostFontFaces(const std::string& sessionId, const std::vector<RitoNitroPinnedFontFace>& fonts) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> removeHostFontFaces(const std::string& sessionId, const std::vector<std::string>& sha256) = 0;
+      virtual std::shared_ptr<Promise<RitoNitroResult>> markFontFamilyUnavailable(const std::string& sessionId, const std::string& family) = 0;
+      virtual std::vector<double> paperTurnLayouts() = 0;
+      virtual std::string paperTurnNew() = 0;
+      virtual void paperTurnFree(const std::string& turn) = 0;
+      virtual RitoNitroPaperTurnLeaves paperTurnBegin(const std::string& turn, const std::vector<double>& frame, double leavesCapacity) = 0;
+      virtual RitoNitroPaperTurnLeaves paperTurnLay(const std::string& turn, double epoch, double leavesCapacity) = 0;
+      virtual RitoNitroPaperTurnSheet paperTurnSheet(const std::string& turn, double index, double pointsCapacity) = 0;
+      virtual RitoNitroPaperTurnForgotten paperTurnForget(const std::string& turn, double epoch, double leavesCapacity) = 0;
+      virtual std::vector<double> paperTurnState(const std::string& turn, double now) = 0;
+      virtual std::vector<double> paperTurnBegins(const std::string& turn, double dx, double velocity, bool sameSpreads) = 0;
+      virtual std::vector<double> paperTurnSettle(const std::string& turn, double from, double velocity, double to) = 0;
+      virtual RitoNitroPaperTurnSettleStep paperTurnSettleStep(const std::string& turn, const std::vector<double>& settle, double seconds, double now) = 0;
+      virtual double paperTurnTravel(const std::vector<double>& touch, double width, double spine) = 0;
+      virtual bool paperTurnLands(const std::vector<double>& release) = 0;
+      virtual double paperTurnEyeHeight(double width, double height) = 0;
 
     protected:
       // Hybrid Setup

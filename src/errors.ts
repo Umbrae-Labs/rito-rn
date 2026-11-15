@@ -11,6 +11,8 @@ export type RitoNativeStatus =
   | 9
   | 10
   | 11
+  /** A resource read waits on content shards; the call's data holds a RITOPSH1 message. */
+  | 12
   | 255;
 
 export class RitoNativeError extends Error {
@@ -21,6 +23,17 @@ export class RitoNativeError extends Error {
   ) {
     super(message);
     this.name = 'RitoNativeError';
+  }
+}
+
+/** A resource read of a session opened from shards waits on content shards; supply them and retry. */
+export class RitoResourcePendingError extends RitoNativeError {
+  constructor(
+    readonly pending: { readonly shardIds: readonly number[]; readonly message: string },
+    operation: string,
+  ) {
+    super(12, pending.message || `Rito ${operation} waits on content shards ${pending.shardIds.join(', ')}.`, operation);
+    this.name = 'RitoResourcePendingError';
   }
 }
 

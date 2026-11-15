@@ -9,6 +9,11 @@ namespace ritojs::reactnative {
 namespace {
 // Keep the bridge limit aligned with Rito core's MAX_WIRE_BYTES (256 MiB).
 constexpr std::uint64_t kMaximumWireBytes = 256ULL * 1024ULL * 1024ULL;
+#ifdef RITO_STATUS_RESOURCE_PENDING
+constexpr std::uint32_t kRitoStatusResourcePending = RITO_STATUS_RESOURCE_PENDING;
+#else
+constexpr std::uint32_t kRitoStatusResourcePending = 12;
+#endif
 
 std::vector<std::uint8_t> copyBuffer(rito_owned_buffer* buffer, const char* field) {
   if (buffer == nullptr) {
@@ -53,6 +58,13 @@ RitoFfiResult collectRitoResult(
       return result;
     }
     rito_buffer_free(data);
+    if (status == kRitoStatusResourcePending) {
+      // The diagnostic is a binary RITOPSH1 message naming the content
+      // shards to supply, not UTF-8; it crosses as the call's data.
+      result.data = copyOwnedBuffer(error, "Rito pending shards buffer");
+      result.error = "Rito resource read is waiting on content shards.";
+      return result;
+    }
     result.error = copyOwnedError(error);
     if (result.error.empty()) {
       result.error = "Rito native call failed without a diagnostic.";

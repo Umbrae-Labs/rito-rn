@@ -1,4 +1,4 @@
-import { RitoNativeError, RitoNativeSessionInvalidatedError, type RitoNativeStatus } from './errors';
+import { RitoNativeError, RitoNativeSessionInvalidatedError, RitoResourcePendingError, type RitoNativeStatus } from './errors';
 import { getRitoNativeReaderModule, type RitoNativeCallResult, type RitoNativePinnedFontFace, type RitoNativeReaderModule } from './native';
 import { decodeRitoArtifact, decodeRitoPageRecords, decodeRitoResource } from './protocol/artifact';
 import { decodeRitoPublication } from './protocol/publication';
@@ -9,11 +9,19 @@ import {
   type RitoBackgroundRequest, type RitoForegroundHandoff,
 } from './protocol/requests';
 import type { RitoArtifact, RitoBackgroundAdvance, RitoBackgroundHandoffAck, RitoForegroundHandoffAck, RitoPageRecords, RitoPublication, RitoResource } from './protocol/artifact-types';
+import {
+  decodeRitoAnnotationResponse, decodeRitoFontCatalog, decodeRitoFontNames, decodeRitoNavigationResult,
+  decodeRitoPendingShards, decodeRitoShardIds, decodeRitoTextInteractionResponse, encodeRitoAnnotationRequest,
+  encodeRitoNavigationRequest, encodeRitoSpreadRequest, encodeRitoTextInteractionRequest,
+  type RitoAnnotationRequest, type RitoAnnotationResponse, type RitoFontCatalog, type RitoNavigationRequest,
+  type RitoNavigationResult, type RitoSpreadRequest, type RitoTextInteractionRequest, type RitoTextInteractionResponse,
+} from './protocol/queries';
 import { decodeRitoExactSourceRangeResolution, decodeRitoFootnote, decodeRitoSearchResponse, decodeRitoTextRangeGeometry, encodeRitoExactSourceRangeRequest, encodeRitoSearchRequest, encodeRitoTextRangeRequest, type RitoExactSourceRangeRequest, type RitoExactSourceRangeResolution, type RitoFootnote, type RitoSearchRequest, type RitoSearchResponse, type RitoTextRangeGeometry, type RitoTextRangeRequest } from './protocol/interaction';
 
 const STATUS_OK = 0;
 const STATUS_TARGET_NOT_PUBLISHED = 6;
 const STATUS_ADJACENT_PENDING = 10;
+const STATUS_RESOURCE_PENDING = 12;
 
 export interface RitoReaderSessionOptions { readonly native?: RitoNativeReaderModule; readonly maxContinuationQuanta?: number }
 
@@ -42,13 +50,42 @@ export class RitoReaderSession {
   }
 
   static async open(publication: Uint8Array, request: RitoArtifactRequest, fonts: readonly RitoNativePinnedFontFace[], options: RitoReaderSessionOptions = {}): Promise<{ readonly session: RitoReaderSession; readonly artifact: RitoArtifact }> {
+    return RitoReaderSession.openWith(request, options, 'open', (native, encoded) => native.open(publication, encoded, fonts));
+  }
+
+  /**
+   * Opens a publication split by `@ritojs/pack` from its skeleton shard. The
+   * skeleton carries everything layout reads; a resource read that needs a
+   * content shard rejects with RitoResourcePendingError until supplyShard
+   * hands it over. `key` is the skeleton's 32-byte key for encrypted shards.
+   */
+  static async openShards(skeleton: Uint8Array, key: Uint8Array | undefined, request: RitoArtifactRequest, fonts: readonly RitoNativePinnedFontFace[], options: RitoReaderSessionOptions = {}): Promise<{ readonly session: RitoReaderSession; readonly artifact: RitoArtifact }> {
+    if (key !== undefined && key.byteLength !== 32) throw new RangeError('A Rito shard key must be 32 bytes.');
+    return RitoReaderSession.openWith(request, options, 'openShards', (native, encoded) => native.openShards(skeleton, key, encoded, fonts));
+  }
+
+  /**
+   * Opens without a pinned font policy (rito_open). Chapter-local pagination
+   * shapes with pinned faces only, so the engine fails such an open closed;
+   * hosts use open. Bound for completeness of the ABI.
+   */
+  static async openWithoutPinnedFonts(publication: Uint8Array, request: RitoArtifactRequest, options: RitoReaderSessionOptions = {}): Promise<{ readonly session: RitoReaderSession; readonly artifact: RitoArtifact }> {
+    return RitoReaderSession.openWith(request, options, 'openWithoutPinnedFonts', (native, encoded) => native.openWithoutPinnedFonts(publication, encoded));
+  }
+
+  private static async openWith(
+    request: RitoArtifactRequest,
+    options: RitoReaderSessionOptions,
+    operation: string,
+    call: (native: RitoNativeReaderModule, request: Uint8Array) => Promise<RitoNativeCallResult>,
+  ): Promise<{ readonly session: RitoReaderSession; readonly artifact: RitoArtifact }> {
     const native = options.native ?? getRitoNativeReaderModule();
     const session = new RitoReaderSession(request.sessionId, { ...options, native });
     try {
-      const response = await native.open(publication, encodeRitoArtifactRequest(request), fonts);
-      if (response.status !== STATUS_OK) throw nativeError(response, 'open');
+      const response = await call(native, encodeRitoArtifactRequest(request));
+      if (response.status !== STATUS_OK) throw nativeError(response, operation);
       const artifact = decodeRitoArtifact(response.data);
-      if (artifact.sessionId !== request.sessionId) throw new RitoNativeError(4, 'Rito open artifact session ID does not match the request.', 'open');
+      if (artifact.sessionId !== request.sessionId) throw new RitoNativeError(4, 'Rito open artifact session ID does not match the request.', operation);
       // The opening artifact has already consumed the request ID supplied to
       // native open. Publish it to the session allocator before any later
       // turn asks for nextRequestId.
@@ -146,6 +183,36 @@ export class RitoReaderSession {
     }
     this.rememberArtifact(artifact);
     const key = peekKey(request.fromArtifactId, request.direction);
+    const previous = this.peekedArtifacts.get(key);
+    this.peekedArtifacts.set(key, artifact);
+    if (previous && previous.artifactId !== artifact.artifactId) {
+      await this.releaseArtifact(previous.artifactId).catch(() => undefined);
+    }
+    return artifact;
+  }
+
+  /**
+   * Publishes one spread of the revision behind an artifact, by its position
+   * in that revision's layout (resolveNavigation's `layout` query lists them),
+   * without changing the visible artifact. The result is owned like a peek:
+   * commit it with commitPeekedArtifact or release it.
+   */
+  async peekSpread(request: RitoSpreadRequest): Promise<RitoArtifact> {
+    this.assertSession(request.sessionId);
+    this.assertArtifact(request.fromArtifactId);
+    if (!Number.isInteger(request.spreadIndex) || request.spreadIndex < 0 || request.spreadIndex > 0xffff_ffff) throw new RangeError('Rito spread index must be a u32.');
+    if (this.activeNavigation) throw new RitoNativeError(8, 'Spread preview must yield to foreground navigation.', 'peekSpread');
+    const generation = this.foregroundGeneration;
+    const result = await this.native.peekSpread(this.sessionId, encodeRitoSpreadRequest(request));
+    this.recordConsumedRequestId(request.requestId);
+    if (result.status !== STATUS_OK) throw nativeError(result, 'peekSpread');
+    const artifact = this.decodeCandidate(result.data, request.requestId, 'peekSpread');
+    if (generation !== this.foregroundGeneration) {
+      await this.native.releaseArtifact(this.sessionId, artifact.artifactId).catch(() => undefined);
+      this.artifacts.delete(artifact.artifactId);
+      throw new RitoNativeError(5, 'Spread peek was superseded by foreground navigation.', 'peekSpread');
+    }
+    const key = `${request.fromArtifactId.toString()}:spread:${request.spreadIndex}`;
     const previous = this.peekedArtifacts.get(key);
     this.peekedArtifacts.set(key, artifact);
     if (previous && previous.artifactId !== artifact.artifactId) {
@@ -334,6 +401,70 @@ export class RitoReaderSession {
   async search(request: RitoSearchRequest): Promise<RitoSearchResponse> { this.assertSession(request.sessionId); this.assertArtifact(request.artifactId); const response = decodeRitoSearchResponse(await this.success('search', () => this.native.search(this.sessionId, encodeRitoSearchRequest(request)))); if (response.artifactId !== request.artifactId || response.query !== request.query) throw new RitoNativeError(4, 'Search response does not match the request.', 'search'); return response; }
   async textRangeGeometry(request: RitoTextRangeRequest): Promise<RitoTextRangeGeometry> { this.assertSession(request.sessionId); this.assertArtifact(request.artifactId); const response = decodeRitoTextRangeGeometry(await this.success('textRangeGeometry', () => this.native.textRangeGeometry(this.sessionId, encodeRitoTextRangeRequest(request)))); if (response.artifactId !== request.artifactId || response.pageIndex !== request.pageIndex) throw new RitoNativeError(4, 'Text geometry response does not match the request.', 'textRangeGeometry'); return response; }
   async resolveExactSourceRange(request: RitoExactSourceRangeRequest): Promise<RitoExactSourceRangeResolution> { this.assertSession(request.sessionId); this.assertArtifact(request.artifactId); const response = decodeRitoExactSourceRangeResolution(await this.success('resolveExactSourceRange', () => this.native.resolveExactSourceRange(this.sessionId, encodeRitoExactSourceRangeRequest(request)))); if (response.artifactId !== request.artifactId) throw new RitoNativeError(4, 'Exact source range response does not match the request.', 'resolveExactSourceRange'); return response; }
+  /**
+   * Resolves one text selection query (a caret at a point, the range between
+   * two carets, a kept caret extended to a point, a range widened to words or
+   * paragraphs, or a caret movement) the way a browser reader does.
+   */
+  async resolveTextInteraction(request: RitoTextInteractionRequest): Promise<RitoTextInteractionResponse> {
+    this.assertSession(request.sessionId);
+    this.assertArtifact(request.artifactId);
+    const response = decodeRitoTextInteractionResponse(await this.success('resolveTextInteraction', () => this.native.resolveTextInteraction(this.sessionId, encodeRitoTextInteractionRequest(request))));
+    if (response.artifactId !== request.artifactId) throw new RitoNativeError(4, 'Text interaction response does not match the request.', 'resolveTextInteraction');
+    return response;
+  }
+  /** Builds an annotation target for a source range, or locates a stored one; the target is the engine's canonical JSON to persist. */
+  async resolveAnnotation(request: RitoAnnotationRequest): Promise<RitoAnnotationResponse> {
+    this.assertSession(request.sessionId);
+    return decodeRitoAnnotationResponse(await this.success('resolveAnnotation', () => this.native.resolveAnnotation(this.sessionId, encodeRitoAnnotationRequest(request))));
+  }
+  /**
+   * Answers a reading-position question: the TOC entry a page or a source
+   * position reads under, where a stored locator lands, the reading order of
+   * two source positions, or the page table of an artifact's revision.
+   */
+  async resolveNavigation(request: RitoNavigationRequest): Promise<RitoNavigationResult> {
+    this.assertSession(request.sessionId);
+    const query = request.query;
+    if ('artifactId' in query) this.assertArtifact(query.artifactId);
+    return decodeRitoNavigationResult(await this.success('resolveNavigation', () => this.native.resolveNavigation(this.sessionId, encodeRitoNavigationRequest(request))));
+  }
+  /** Every family a font-family list can name in this session, host families first. */
+  async fontCatalog(): Promise<RitoFontCatalog> {
+    return decodeRitoFontCatalog(await this.success('fontCatalog', () => this.native.fontCatalog(this.sessionId)));
+  }
+  /** The names in a CSS font-family list that no family in the catalog answers to. */
+  async unresolvedFontFamilies(list: string): Promise<readonly string[]> {
+    return decodeRitoFontNames(await this.success('unresolvedFontFamilies', () => this.native.unresolvedFontFamilies(this.sessionId, list)));
+  }
+  /** Adds host faces; the next request lays out with them nameable, published artifacts keep their layout. */
+  async addHostFontFaces(fonts: readonly RitoNativePinnedFontFace[]): Promise<void> {
+    if (fonts.length === 0) throw new RangeError('At least one Rito host font face is required.');
+    await this.success('addHostFontFaces', () => this.native.addHostFontFaces(this.sessionId, fonts));
+  }
+  /** Removes host faces by their SHA-256 digests; at least one face must remain. */
+  async removeHostFontFaces(sha256: readonly string[]): Promise<void> {
+    if (sha256.length === 0) throw new RangeError('At least one Rito font digest is required.');
+    await this.success('removeHostFontFaces', () => this.native.removeHostFontFaces(this.sessionId, sha256));
+  }
+  /** Marks a publication face this host cannot paint, so the next request lays out without it. */
+  async markFontFamilyUnavailable(family: string): Promise<void> {
+    if (!family) throw new RangeError('Rito font family must not be empty.');
+    await this.success('markFontFamilyUnavailable', () => this.native.markFontFamilyUnavailable(this.sessionId, family));
+  }
+  /** Hands a session opened from shards one content shard; returns its id. Supplying a shard twice is harmless. */
+  async supplyShard(shard: Uint8Array, key?: Uint8Array): Promise<number> {
+    if (shard.byteLength === 0) throw new RangeError('A Rito shard must not be empty.');
+    if (key !== undefined && key.byteLength !== 32) throw new RangeError('A Rito shard key must be 32 bytes.');
+    const ids = decodeRitoShardIds(await this.success('supplyShard', () => this.native.supplyShard(this.sessionId, shard, key)));
+    if (ids.length !== 1) throw new RitoNativeError(4, 'Rito supplyShard did not return one shard id.', 'supplyShard');
+    return ids[0]!;
+  }
+  /** Every content shard id, ordered for fetching ahead of need from the chapter at `href`; empty for an archive. */
+  async contentShardsNear(href: string): Promise<readonly number[]> {
+    if (!href) throw new RangeError('Rito content shard href must not be empty.');
+    return decodeRitoShardIds(await this.success('contentShardsNear', () => this.native.contentShardsNear(this.sessionId, href)));
+  }
   /** Reads what one page of a live artifact holds: its hits, semantic outline, text and text runs. */
   async readPage(artifactId: bigint, pageIndex: number): Promise<RitoPageRecords> {
     this.assertArtifact(artifactId);
@@ -509,6 +640,9 @@ class NavigationToken {
 }
 
 function nativeError(result: RitoNativeCallResult, operation: string): RitoNativeError {
+  if (Number(result.status) === STATUS_RESOURCE_PENDING && result.data.byteLength > 0) {
+    return new RitoResourcePendingError(decodeRitoPendingShards(result.data), operation);
+  }
   const numericStatus = Number(result.status);
   const status = Number.isInteger(numericStatus) && numericStatus >= 0 && numericStatus <= 255
     ? numericStatus as RitoNativeStatus

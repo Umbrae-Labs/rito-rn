@@ -40,12 +40,22 @@ describe('Rito React Native binary protocol', () => {
 
   it('decodes the Rito Rust artifact fixture, its pages by index and size', () => {
     const artifact = decodeRitoArtifact(fixture('rito-3-artifact.hex'));
-    expect(artifact.protocolVersion).toBe(7);
+    expect(artifact.protocolVersion).toBe(9);
     expect(artifact.localPageIndexes).toEqual([9, 10]);
     expect(artifact.bookPageIndex).toBe(140);
     expect(artifact.bookPageCount).toBe(312);
+    expect(artifact.targetBlockOffset).toBe(377.640625);
     expect(artifact.displayList.commandCount).toBe(14);
     expect(artifact.pages).toEqual([{ pageIndex: 9, width: 400.25, height: 1194.25 }]);
+    expect(artifact.fonts).toEqual([{
+      family: 'Noto Serif CJK JP',
+      href: 'fonts/serif.woff2',
+      style: 'normal',
+      weight: 650,
+      shapeFingerprint: 'sha256:abcd',
+      byteLength: (1n << 40n) + 7n,
+      features: [{ tag: 'vert', value: 1 }],
+    }]);
   });
 
   it('decodes the Rito Rust page records fixture with classified hits', () => {
@@ -136,7 +146,7 @@ describe('Rito React Native binary protocol', () => {
   it('strictly decodes RITOART1 and nested RITORES1 messages', () => {
     const display = fixture('rito-3-primitive-list.hex');
     const artifact = message('RITOART1')
-      .writeU32(7).writeU32(1).writeU64(91n).writeU64(12n).writeU64(44n).writeU32(3).writeU64(7001n)
+      .writeU32(9).writeU32(1).writeU64(91n).writeU64(12n).writeU64(44n).writeU32(3).writeU64(7001n)
       .writeRecord((locator) => {
         locator.writeUtf8('chapter.xhtml').writeU8(0).writeU8(0).writeU8(1)
           .writeRecord((range) => {
@@ -146,10 +156,10 @@ describe('Rito React Native binary protocol', () => {
           .writeU8(0);
       })
       .writeU32(0).writeU32(7).writeU32(7).writeU32(1).writeU32(7)
-      .writeF64(360).writeF64(640).writeU8(0).writeU8(0)
+      .writeF64(360).writeF64(640).writeU8(0).writeU8(0).writeU8(0)
       .writeU32(0).writeU32(1).writeU32(1).writeRecord((record) => record.writeU32(4).writeU32(14).writeU64(BigInt(display.byteLength)).writeBytes(display))
       .writeU32(1).writeRecord((record) => record.writeU32(0).writeUtf8('images/cover.png'))
-      .writeU32(1).writeRecord((record) => record.writeUtf8('Rito Serif').writeUtf8('fonts/serif.woff2').writeUtf8('normal').writeU16(400).writeUtf8('shape-v1').writeU64(8192n))
+      .writeU32(1).writeRecord((record) => record.writeUtf8('Rito Serif').writeUtf8('fonts/serif.woff2').writeUtf8('normal').writeU16(400).writeUtf8('shape-v1').writeU64(8192n).writeU32(0))
       .writeU32(0);
 
     const decoded = decodeRitoArtifact(finish(artifact));
@@ -167,7 +177,7 @@ describe('Rito React Native binary protocol', () => {
 
   it('strictly decodes publication metadata and nested TOC', () => {
     const publication = message('RITOPUB1')
-      .writeU32(7).writeU64(91n)
+      .writeU32(9).writeU64(91n)
       .writeRecord((record) => record.writeUtf8('Fixture').writeUtf8('en').writeUtf8('urn:fixture').writeU8(0))
       .writeU32(1)
       .writeRecord((record) => record.writeU32(0).writeU8(1).writeU32(0).writeUtf8('chapter').writeUtf8('chapter.xhtml'))
