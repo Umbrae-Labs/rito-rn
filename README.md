@@ -38,6 +38,25 @@ pnpm add @umbrae-labs/rito-rn react-native-nitro-modules@0.37.0
 | `canary` | Rito upstream development (`dev`) |
 | `lunar` | Rito `dev` with Lunar kernel changes and bindings |
 
+### Rito versions
+
+Each package embeds one Rito engine commit. The reader protocol version must match
+between the engine and the TypeScript adapter, so upgrade both together through
+this package. The authoritative record is `native/rito/rito-source.json` in the
+installed package.
+
+| rito-rn | npm tag | Rito engine | Reader protocol |
+| --- | --- | --- | --- |
+| `0.3.1` | `latest` | [`ed0284f3`](https://github.com/Ringyuki/Rito/commit/ed0284f3703244da28b3e6efd80cf29267cf6e65) (`@ritojs/core` 4.1.0, `rito_flutter` 0.9.0) | 7 |
+| `0.3.1-lunar.1` | `lunar` | [`ed0284f3`](https://github.com/Ringyuki/Rito/commit/ed0284f3703244da28b3e6efd80cf29267cf6e65) (`@ritojs/core` 4.1.0, `rito_flutter` 0.9.0) | 7 |
+| `0.3.0` | — | [`9c9111ca`](https://github.com/Ringyuki/Rito/commit/9c9111ca2fc57f63ce81c65d3c4f80cb513610ae) (`@ritojs/core` 3.2.1) | 6 |
+| `0.3.0-lunar.1` | — | [`9c9111ca`](https://github.com/Ringyuki/Rito/commit/9c9111ca2fc57f63ce81c65d3c4f80cb513610ae) (`@ritojs/core` 3.2.1) | 6 |
+| `0.2.0` – `0.2.2` | — | [`95267a85`](https://github.com/Ringyuki/Rito/commit/95267a850d3d8f6f1d695facd9720a7e15e7ec66) (`@ritojs/core` 2.0.0 and 5 commits) with the Lunar patch [`d5b62086`](https://github.com/Saramanda9988/Rito/commit/d5b620862d9d330fe5326e1974ee7ed05ab8967b) | 5 |
+
+Releases up to 0.3.1 carry no Lunar kernel commits on the `lunar` line; it differs
+from `latest` only in its engine profile. Version 0.2.x predates the split into
+engine lines and builds the Lunar profile for every tag.
+
 Use a native application build after installing or upgrading this package so the
 native library changes are included.
 
